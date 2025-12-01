@@ -24,28 +24,7 @@ const SECTION_MAPPING = {
 // Variables globales
 let allDevices = []
 let supabaseSubscription = null
-
-// Declaración de la variable supabase
-const supabase = {
-  initialize: async (url, key) => {
-    // Simulación de inicialización
-    return true
-  },
-  getDevices: async () => {
-    // Simulación de obtención de dispositivos
-    return []
-  },
-  subscribeToChanges: (callback) => {
-    // Simulación de suscripción a cambios
-    return { unsubscribe: () => {} }
-  },
-  updateDeviceStatus: async (deviceId, newStatus) => {
-    // Simulación de actualización de estado de dispositivo
-  },
-  logActivity: async (deviceId, activity, oldStatus, newStatus) => {
-    // Simulación de registro de actividad
-  },
-}
+let supabase = null // Declare the supabase variable
 
 /**
  * Inicialización de la aplicación
@@ -97,11 +76,18 @@ async function handleConfigSubmit(e) {
     return
   }
 
+  const submitBtn = e.target.querySelector("button[type='submit']")
+  submitBtn.disabled = true
+  submitBtn.textContent = "Conectando..."
+
   // Guardar en localStorage
   localStorage.setItem("supabase_url", url)
   localStorage.setItem("supabase_key", key)
 
   await connectToSupabase(url, key)
+
+  submitBtn.disabled = false
+  submitBtn.textContent = "Conectar"
 }
 
 /**
@@ -110,14 +96,25 @@ async function handleConfigSubmit(e) {
 async function connectToSupabase(url, key) {
   console.log("[App] Conectando a Supabase...")
 
+  supabase = window.supabase // Assume supabase is set on window object from supabase-setup.js
   const connected = await supabase.initialize(url, key)
 
   if (!connected) {
+    console.error("[App] Error de conexión - credenciales inválidas o URL incorrecta")
     updateConnectionStatus(false)
-    alert("Error al conectar con Supabase. Verifica tus credenciales.")
+    alert(
+      "⚠️ Error al conectar con Supabase.\n\n" +
+        "Verifica que:\n" +
+        "1. La URL sea correcta (https://xxxx.supabase.co)\n" +
+        "2. La clave anón sea la correcta\n" +
+        "3. Las tablas estén creadas en tu base de datos\n" +
+        "4. Tengas conexión a Internet\n\n" +
+        "Si el problema persiste, carga dispositivos de demostración.",
+    )
     localStorage.removeItem("supabase_url")
     localStorage.removeItem("supabase_key")
     showConfigModal()
+    loadDemoDevices() // Cargar demo incluso si no conecta
     return
   }
 
@@ -154,7 +151,7 @@ function updateConnectionStatus(connected) {
     statusElement.classList.remove("connected")
     statusElement.classList.add("disconnected")
     statusElement.textContent = "✗ Desconectado"
-    userElement.textContent = "Esperando conexión..."
+    userElement.textContent = "Usando dispositivos de demostración"
   }
 }
 
@@ -163,6 +160,12 @@ function updateConnectionStatus(connected) {
  */
 async function loadDevices() {
   console.log("[App] Cargando dispositivos...")
+
+  if (!supabase.isConnected()) {
+    console.warn("[App] No hay conexión a Supabase. Cargando dispositivos de demostración.")
+    loadDemoDevices()
+    return
+  }
 
   allDevices = await supabase.getDevices()
 
