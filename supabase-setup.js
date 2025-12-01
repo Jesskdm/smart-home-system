@@ -110,6 +110,16 @@
  *     FOR INSERT WITH CHECK (true);
  *
  * -------- FIN DEL SQL --------
+ *
+ * SOLUCIÓN DE PROBLEMAS:
+ *
+ * Si no conecta:
+ * 1. Verifica que la URL sea: https://[proyecto].supabase.co (sin / al final)
+ * 2. Verifica que uses la clave "anon" (public), NO la clave de servicio
+ * 3. En Supabase, ve a Settings > Database > Connection Pooling y copia la URL
+ * 4. Asegúrate de haber ejecutado el SQL para crear las tablas
+ * 5. Verifica en Supabase que las políticas RLS estén habilitadas correctamente
+ * 6. Abre la consola del navegador (F12) y revisa los mensajes de error
  */
 
 class SupabaseClient {
@@ -125,11 +135,32 @@ class SupabaseClient {
    */
   async initialize(url, anonKey) {
     try {
+      if (!url || !anonKey || typeof url !== "string" || typeof anonKey !== "string") {
+        console.error("[Supabase] URL o clave inválidas")
+        return false
+      }
+
+      if (!window.supabase || !window.supabase.createClient) {
+        console.error("[Supabase] Biblioteca de Supabase no cargada correctamente")
+        return false
+      }
+
       this.client = window.supabase.createClient(url, anonKey)
       console.log("[Supabase] Conectado exitosamente")
+
+      const { data, error } = await this.client.from("devices").select("count", { count: "exact" })
+
+      if (error) {
+        console.error("[Supabase] Error en prueba de conexión:", error)
+        this.client = null
+        return false
+      }
+
+      console.log("[Supabase] Prueba de conexión exitosa")
       return true
     } catch (error) {
-      console.error("[Supabase] Error al conectar:", error)
+      console.error("[Supabase] Error al conectar:", error.message)
+      this.client = null
       return false
     }
   }
@@ -258,5 +289,4 @@ class SupabaseClient {
   }
 }
 
-// Crear instancia global
 const supabase = new SupabaseClient()
