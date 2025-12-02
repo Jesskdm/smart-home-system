@@ -84,6 +84,26 @@ const CAMERA_CONFIGS = {
       fullUrl: "http://root:pass@192.168.1.104:80/axis-cgi/mjpg/video.cgi",
     },
   },
+
+  // H-VIEW - Cámaras IP profesionales
+  HVIEW: {
+    name: "H-VIEW",
+    protocol: "rtsp",
+    port: 554,
+    streamPath: "/stream1", // o /h264/ch1/main
+    auth: "rtsp", // Autenticación en URL RTSP
+    example: {
+      url: "rtsp://192.168.1.100",
+      username: "admin",
+      password: "admin123",
+      fullUrl: "rtsp://admin:admin123@192.168.1.100:554/stream1",
+    },
+    alternativeStreams: [
+      "rtsp://admin:admin123@192.168.1.100:554/stream1",
+      "rtsp://admin:admin123@192.168.1.100:554/h264/ch1/main",
+      "rtsp://admin:admin123@192.168.1.100:554/h264/ch1/sub",
+    ],
+  },
 }
 
 /**
@@ -101,26 +121,104 @@ PASO 1: IDENTIFICAR TU CÁMARA
 2. Accede a la interfaz web de la cámara (generalmente en http://IP_DE_CAMARA)
 3. Anota la IP, usuario y contraseña
 
-PASO 2: ACTUALIZAR LA BASE DE DATOS
-------------------------------------
-En Supabase, ejecuta este SQL para agregar/actualizar una cámara:
+=================================================================
+CONFIGURACIÓN ESPECÍFICA PARA H-VIEW
+=================================================================
+
+H-VIEW es una marca de cámaras IP que utiliza protocolo RTSP.
+Son muy populares y fáciles de integrar.
+
+PASO 1: ENCONTRAR LA IP DE LA CÁMARA H-VIEW
+-------------------------------------------
+1. Conecta la cámara H-VIEW a tu red
+2. Usa la app móvil de H-VIEW o accede a: http://[IP_DE_CAMARA]:8080
+3. Usuario y contraseña por defecto:
+   - Usuario: admin
+   - Contraseña: admin (o admin12345)
+4. IMPORTANTE: Cambia la contraseña después de conectar
+
+PASO 2: OBTENER DATOS DE CONEXIÓN
+---------------------------------
+En la interfaz web de H-VIEW:
+1. Ve a: Configuración → Red → RTSP
+2. Anota el puerto RTSP (por defecto 554)
+3. Anota la ruta del stream (usualmente /stream1 o /h264/ch1/main)
+
+PASO 3: FORMATOS DE URL H-VIEW
+------------------------------
+H-VIEW soporta estos formatos de URL RTSP:
+
+Formato 1 (Más común):
+  rtsp://admin:contraseña@192.168.1.100:554/stream1
+
+Formato 2 (H264 main):
+  rtsp://admin:contraseña@192.168.1.100:554/h264/ch1/main
+
+Formato 3 (H264 sub - menor calidad, menos recursos):
+  rtsp://admin:contraseña@192.168.1.100:554/h264/ch1/sub
+
+Ejemplo real:
+  rtsp://admin:admin123@192.168.1.100:554/stream1
+
+PASO 4: ACTUALIZAR LA BASE DE DATOS
+-----------------------------------
+En Supabase, ejecuta este SQL:
 
 UPDATE devices 
 SET 
-  camera_url = 'http://192.168.1.100:80/ISAPI/Streaming/channels/101/preview',
+  camera_url = 'rtsp://admin:admin123@192.168.1.100:554/stream1',
   camera_username = 'admin',
-  camera_password = 'admin12345',
+  camera_password = 'admin123',
   camera_type = 'ip'
 WHERE name = 'Cámara Entrada' AND type = 'camera';
 
-PASO 3: CONFIGURAR EL BACKEND (Node.js/Express)
------------------------------------------------
-El backend debe tener un endpoint que haga proxy del stream:
+O si no existe la cámara, inserta:
+
+INSERT INTO devices (name, type, location, camera_url, camera_username, camera_password, camera_type, status)
+VALUES (
+  'Cámara H-VIEW Entrada',
+  'camera',
+  'Entrada',
+  'rtsp://admin:admin123@192.168.1.100:554/stream1',
+  'admin',
+  'admin123',
+  'ip',
+  '{
+    "online": true,
+    "recording": true
+  }'
+);
+
+PASO 5: PROBAR CONEXIÓN ANTES
+-----------------------------
+Antes de agregar en la app, prueba la URL en tu navegador:
+1. Abre: rtsp://admin:admin123@192.168.1.100:554/stream1
+   (Algunos navegadores no abren RTSP directamente)
+2. O usa VLC: Media → Abrir ubicación de red → pega la URL RTSP
+
+Si funciona en VLC, funcionará en la app.
+
+PASO 6: CONFIGURAR BACKEND (Node.js)
+-----------------------------------
+El backend debe convertir RTSP a MJPEG porque los navegadores
+no soportan RTSP directamente. Usa esta configuración:
+
+1. Instala FFmpeg en tu servidor:
+   
+   Windows:
+     Descarga de: https://ffmpeg.org/download.html
+   
+   Linux (Ubuntu/Debian):
+     sudo apt-get install ffmpeg
+   
+   macOS:
+     brew install ffmpeg
+
+2. En tu backend Node.js, crea el endpoint:
 
 app.get('/api/camera-proxy', async (req, res) => {
   const deviceId = req.query.device;
   
-  // Obtener datos de la cámara desde Supabase
   const { data } = await supabase
     .from('devices')
     .select('camera_url, camera_username, camera_password')
@@ -131,90 +229,95 @@ app.get('/api/camera-proxy', async (req, res) => {
     return res.status(404).send('Cámara no configurada');
   }
 
-  // Retransmitir el stream
-  const auth = Buffer.from(\`\${data.camera_username}:\${data.camera_password}\`).toString('base64');
+  // Usar ffmpeg para convertir RTSP a MJPEG
+  const ffmpeg = require('fluent-ffmpeg');
   
-  try {
-    const response = await fetch(data.camera_url, {
-      headers: {
-        'Authorization': \`Basic \${auth}\`
-      }
-    });
-    
-    res.setHeader('Content-Type', 'image/jpeg');
-    response.body.pipe(res);
-  } catch (error) {
-    res.status(500).send('Error al conectar con la cámara');
-  }
+  res.setHeader('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME');
+  res.setHeader('Cache-Control', 'no-cache');
+
+  const proc = ffmpeg(data.camera_url)
+    .inputOptions(['-rtsp_transport tcp', '-fflags nobuffer'])
+    .outputOptions([
+      '-f', 'mjpeg',
+      '-q:v', '5',
+      '-vf', 'fps=fps=10'
+    ])
+    .on('error', (err) => {
+      console.error('FFmpeg error:', err);
+      res.end();
+    })
+    .pipe(res);
+
+  res.on('close', () => proc.kill());
 });
 
-PASO 4: CONFIGURAR FRONTEND
----------------------------
-El frontend automáticamente mostrará el stream si:
-- camera_url está configurada en BD
-- camera_type = 'ip'
-- Las credenciales son correctas
+O instala: npm install fluent-ffmpeg
 
-PASO 5: VERIFICAR CONEXIÓN
+PASO 7: VERIFICAR EN LA APP
 --------------------------
-1. Abre http://tu-servidor/
-2. Navega a la sección "Cámaras de Seguridad"
+1. Reinicia la app
+2. Ve a sección "Cámaras de Seguridad"
 3. Deberías ver el stream en vivo
 
 =================================================================
-TROUBLESHOOTING - PROBLEMAS COMUNES
+TROUBLESHOOTING H-VIEW
 =================================================================
 
-PROBLEMA: "Error al conectar con la cámara"
-SOLUCIONES:
-- Verifica que la IP de la cámara sea correcta
-- Comprueba que usuario/contraseña sean correctos
-- Confirma que la cámara está encendida
-- Verifica el protocolo (HTTP vs RTSP)
-- Comprueba firewall entre servidor y cámara
+PROBLEMA: "Error de conexión"
+SOLUCIÓN 1: Verifica la IP
+  - Abre http://192.168.1.100:8080 en el navegador
+  - Si no abre, la IP es incorrecta
 
-PROBLEMA: Imagen negra o no carga
-SOLUCIONES:
-- La ruta del stream (/ISAPI/Streaming...) podría ser incorrecta
-- Prueba accediendo directamente en el navegador: 
-  http://admin:pass@192.168.1.100/ruta/stream
-- Consulta la documentación de tu marca
+SOLUCIÓN 2: Verifica credenciales
+  - Por defecto son: admin / admin
+  - Si no funcionan, resetea la cámara a factory defaults
 
-PROBLEMA: Autenticación rechazada
-SOLUCIONES:
-- Verifica mayúsculas en usuario/contraseña
-- Comprueba que la autenticación sea HTTP Basic
-- Algunos modelos usan digest auth (requiere más configuración)
+SOLUCIÓN 3: Verifica el puerto RTSP
+  - Accede a la interfaz web
+  - Ve a Configuración → Red → RTSP
+  - Verifica que esté habilitado (por defecto puerto 554)
 
-=================================================================
-LINKS ÚTILES POR MARCA
-=================================================================
+PROBLEMA: "Imagen negra o no carga"
+SOLUCIÓN 1: Prueba diferentes rutas:
+  rtsp://admin:pass@ip:554/stream1
+  rtsp://admin:pass@ip:554/h264/ch1/main
+  rtsp://admin:pass@ip:554/h264/ch1/sub
 
-Hikvision:    https://www.hikvision.com/en/
-Dahua:        https://www.dahuasecurity.com/
-TP-Link Tapo: https://www.tapo.com/
-Reolink:      https://reolink.com/
-Axis:         https://www.axis.com/
+SOLUCIÓN 2: Verifica firewall
+  - La cámara y servidor deben estar en misma red
+  - O abre puerto 554 en el firewall
 
-=================================================================
-CÓMO ENCONTRAR LA IP DE TU CÁMARA
-=================================================================
+PROBLEMA: "Autenticación rechazada"
+SOLUCIÓN: Asegúrate de usar credenciales correctas
+  - Usuario: admin
+  - Contraseña: la que configuraste (por defecto admin)
+  - Si olvidaste, resetea la cámara
 
-1. Conecta la cámara a tu red
-2. Accede al router y busca dispositivos conectados
-3. O usa herramientas como: Advanced IP Scanner, nmap, ZenMap
-4. Busca en los logs del router o app del fabricante
+PROBLEMA: "FFmpeg no funciona"
+SOLUCIÓN: Verifica que esté instalado
+  ffmpeg -version
+  Si no funciona, instálalo e intenta de nuevo
 
 =================================================================
-SEGURIDAD IMPORTANTE
+PUERTOS COMUNES H-VIEW
 =================================================================
 
-1. NUNCA uses credenciales débiles (admin/admin)
-2. Cambia las credenciales por defecto INMEDIATAMENTE
-3. Asegúrate de que la cámara está en una red segura
-4. Usa VPN o tunelización si accedes desde internet
-5. Actualiza el firmware de la cámara regularmente
-6. En producción, encripta las credenciales en BD
+HTTP Web UI:     8080
+RTSP Stream:     554
+ONVIF:          8000
+HTTPS:          8443
+
+Ejemplo acceso web: http://192.168.1.100:8080
+Usuario: admin
+Contraseña: admin
+
+=================================================================
+ENLACES ÚTILES H-VIEW
+=================================================================
+
+Sitio oficial:        https://www.hview.net/
+Documentación RTSP:   https://www.hview.net/support
+Configuración ONVIF:  https://www.onvif.org/
 
 =================================================================
 `
