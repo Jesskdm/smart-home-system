@@ -1,6 +1,7 @@
 /**
  * APLICACIÓN DE CONTROL DE DISPOSITIVOS INTELIGENTES
  * Gestiona la interfaz de usuario y la lógica de interacción
+ * Se conecta al backend que ya está conectado a Supabase
  */
 
 // Tipos de dispositivos
@@ -23,165 +24,61 @@ const SECTION_MAPPING = {
 
 // Variables globales
 let allDevices = []
-let supabaseSubscription = null
-let supabase = null // Declare the supabase variable
+let pollingInterval = null
 
 /**
  * Inicialización de la aplicación
  */
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[App] Inicializando aplicación")
+  console.log("[v0] Inicializando aplicación")
+  updateConnectionStatus(false, "Cargando...")
 
-  // Verificar si hay credenciales guardadas
-  const savedUrl = localStorage.getItem("supabase_url")
-  const savedKey = localStorage.getItem("supabase_key")
+  // Cargar dispositivos inmediatamente
+  await loadDevices()
 
-  if (savedUrl && savedKey) {
-    await connectToSupabase(savedUrl, savedKey)
-  } else {
-    showConfigModal()
-  }
-
-  // Event listeners del formulario
-  document.getElementById("config-form").addEventListener("submit", handleConfigSubmit)
+  // Configurar polling para actualizaciones en tiempo real (cada 5 segundos)
+  pollingInterval = setInterval(loadDevices, 5000)
 })
 
 /**
- * Mostrar modal de configuración
- */
-function showConfigModal() {
-  const modal = document.getElementById("config-modal")
-  modal.classList.remove("hidden")
-}
-
-/**
- * Ocultar modal de configuración
- */
-function hideConfigModal() {
-  const modal = document.getElementById("config-modal")
-  modal.classList.add("hidden")
-}
-
-/**
- * Maneja el envío del formulario de configuración
- */
-async function handleConfigSubmit(e) {
-  e.preventDefault()
-
-  const url = document.getElementById("supabase-url").value
-  const key = document.getElementById("supabase-key").value
-
-  if (!url || !key) {
-    alert("Por favor completa todos los campos")
-    return
-  }
-
-  const submitBtn = e.target.querySelector("button[type='submit']")
-  submitBtn.disabled = true
-  submitBtn.textContent = "Conectando..."
-
-  // Guardar en localStorage
-  localStorage.setItem("supabase_url", url)
-  localStorage.setItem("supabase_key", key)
-
-  await connectToSupabase(url, key)
-
-  submitBtn.disabled = false
-  submitBtn.textContent = "Conectar"
-}
-
-/**
- * Conecta a Supabase y carga los dispositivos
- */
-async function connectToSupabase(url, key) {
-  console.log("[App] Conectando a Supabase...")
-
-  supabase = window.supabase // Assume supabase is set on window object from supabase-setup.js
-  const connected = await supabase.initialize(url, key)
-
-  if (!connected) {
-    console.error("[App] Error de conexión - credenciales inválidas o URL incorrecta")
-    updateConnectionStatus(false)
-    alert(
-      "⚠️ Error al conectar con Supabase.\n\n" +
-        "Verifica que:\n" +
-        "1. La URL sea correcta (https://xxxx.supabase.co)\n" +
-        "2. La clave anón sea la correcta\n" +
-        "3. Las tablas estén creadas en tu base de datos\n" +
-        "4. Tengas conexión a Internet\n\n" +
-        "Si el problema persiste, carga dispositivos de demostración.",
-    )
-    localStorage.removeItem("supabase_url")
-    localStorage.removeItem("supabase_key")
-    showConfigModal()
-    loadDemoDevices() // Cargar demo incluso si no conecta
-    return
-  }
-
-  updateConnectionStatus(true)
-  hideConfigModal()
-
-  // Cargar dispositivos
-  await loadDevices()
-
-  // Suscribirse a cambios en tiempo real
-  if (supabaseSubscription) {
-    supabaseSubscription.unsubscribe()
-  }
-
-  supabaseSubscription = supabase.subscribeToChanges((payload) => {
-    console.log("[App] Cambio detectado en tiempo real")
-    loadDevices()
-  })
-}
-
-/**
- * Actualiza el estado de conexión en la UI
- */
-function updateConnectionStatus(connected) {
-  const statusElement = document.getElementById("connection-status")
-  const userElement = document.getElementById("user-info")
-
-  if (connected) {
-    statusElement.classList.remove("disconnected")
-    statusElement.classList.add("connected")
-    statusElement.textContent = "✓ Conectado"
-    userElement.textContent = "Smart Home Control"
-  } else {
-    statusElement.classList.remove("connected")
-    statusElement.classList.add("disconnected")
-    statusElement.textContent = "✗ Desconectado"
-    userElement.textContent = "Usando dispositivos de demostración"
-  }
-}
-
-/**
- * Carga todos los dispositivos desde Supabase
+ * Carga todos los dispositivos desde el backend API
  */
 async function loadDevices() {
-  console.log("[App] Cargando dispositivos...")
+  console.log("[v0] Cargando dispositivos desde API...")
 
-  if (!supabase.isConnected()) {
-    console.warn("[App] No hay conexión a Supabase. Cargando dispositivos de demostración.")
+  try {
+    const response = await fetch("/api/devices")
+
+    if (!response.ok) {
+      throw new Error(`Error HTTP: ${response.status}`)
+    }
+
+    const data = await response.json()
+    allDevices = data.devices || []
+
+    console.log("[v0] Dispositivos cargados:", allDevices.length)
+
+    if (allDevices.length === 0) {
+      console.warn("[v0] No se encontraron dispositivos. Mostrando ejemplos.")
+      loadDemoDevices()
+      return
+    }
+
+    renderDevices()
+    updateConnectionStatus(true, "Smart Home Control")
+  } catch (error) {
+    console.error("[v0] Error al cargar dispositivos:", error.message)
     loadDemoDevices()
-    return
+    updateConnectionStatus(false, "Modo Demo")
   }
-
-  allDevices = await supabase.getDevices()
-
-  if (allDevices.length === 0) {
-    console.warn("[App] No se encontraron dispositivos. Mostrando ejemplos.")
-    loadDemoDevices()
-    return
-  }
-
-  renderDevices()
 }
 
 /**
- * Carga dispositivos de demostración (si no hay datos en Supabase)
+ * Carga dispositivos de demostración (si el backend falla)
  */
 function loadDemoDevices() {
+  console.log("[v0] Cargando dispositivos de demostración")
+
   allDevices = [
     {
       id: "1",
@@ -238,10 +135,29 @@ function loadDemoDevices() {
 }
 
 /**
+ * Actualiza el estado de conexión en la UI
+ */
+function updateConnectionStatus(connected, message) {
+  const statusElement = document.getElementById("connection-status")
+  const userElement = document.getElementById("user-info")
+
+  if (connected) {
+    statusElement.classList.remove("disconnected")
+    statusElement.classList.add("connected")
+    statusElement.textContent = "✓ Conectado"
+  } else {
+    statusElement.classList.remove("connected")
+    statusElement.classList.add("disconnected")
+    statusElement.textContent = "⚠️ " + message
+  }
+
+  userElement.textContent = message
+}
+
+/**
  * Renderiza todos los dispositivos en sus secciones
  */
 function renderDevices() {
-  // Limpiar grillas
   Object.values(SECTION_MAPPING).forEach((gridId) => {
     document.getElementById(gridId).innerHTML = ""
   })
@@ -408,42 +324,73 @@ function renderCameraControl(device, status) {
  */
 
 async function toggleLight(deviceId, power) {
+  console.log("[v0] Cambiando luz", deviceId, "a", power)
   const device = allDevices.find((d) => d.id === deviceId)
   if (!device) return
 
   const newStatus = { ...device.status, power }
 
-  await supabase.updateDeviceStatus(deviceId, newStatus)
-  await supabase.logActivity(deviceId, `Luz ${power ? "encendida" : "apagada"}`, device.status, newStatus)
+  try {
+    const response = await fetch(`/api/devices/${deviceId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    })
 
-  loadDevices()
+    if (response.ok) {
+      await loadDevices()
+    }
+  } catch (error) {
+    console.error("[v0] Error al actualizar luz:", error)
+  }
 }
 
 async function updateLightBrightness(deviceId, brightness) {
+  console.log("[v0] Actualizando brillo a", brightness)
   const device = allDevices.find((d) => d.id === deviceId)
   if (!device) return
 
   const newStatus = { ...device.status, brightness: Number.parseInt(brightness) }
 
-  await supabase.updateDeviceStatus(deviceId, newStatus)
-  await supabase.logActivity(deviceId, `Brillo ajustado a ${brightness}%`, device.status, newStatus)
+  try {
+    const response = await fetch(`/api/devices/${deviceId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    })
 
-  loadDevices()
+    if (response.ok) {
+      await loadDevices()
+    }
+  } catch (error) {
+    console.error("[v0] Error al actualizar brillo:", error)
+  }
 }
 
 async function toggleLock(deviceId, locked) {
+  console.log("[v0] Cambiando cerradura", deviceId, "a", locked)
   const device = allDevices.find((d) => d.id === deviceId)
   if (!device) return
 
   const newStatus = { ...device.status, locked }
 
-  await supabase.updateDeviceStatus(deviceId, newStatus)
-  await supabase.logActivity(deviceId, `Cerradura ${locked ? "bloqueada" : "desbloqueada"}`, device.status, newStatus)
+  try {
+    const response = await fetch(`/api/devices/${deviceId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    })
 
-  loadDevices()
+    if (response.ok) {
+      await loadDevices()
+    }
+  } catch (error) {
+    console.error("[v0] Error al actualizar cerradura:", error)
+  }
 }
 
 async function adjustTemperature(deviceId, newTarget) {
+  console.log("[v0] Ajustando temperatura a", newTarget)
   const device = allDevices.find((d) => d.id === deviceId)
   if (!device) return
 
@@ -451,20 +398,39 @@ async function adjustTemperature(deviceId, newTarget) {
   const target = Math.max(15, Math.min(30, newTarget))
   const newStatus = { ...device.status, target }
 
-  await supabase.updateDeviceStatus(deviceId, newStatus)
-  await supabase.logActivity(deviceId, `Temperatura objetivo: ${target}°C`, device.status, newStatus)
+  try {
+    const response = await fetch(`/api/devices/${deviceId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    })
 
-  loadDevices()
+    if (response.ok) {
+      await loadDevices()
+    }
+  } catch (error) {
+    console.error("[v0] Error al actualizar temperatura:", error)
+  }
 }
 
 async function toggleCamera(deviceId, recording) {
+  console.log("[v0] Cambiando grabación de cámara a", recording)
   const device = allDevices.find((d) => d.id === deviceId)
   if (!device) return
 
   const newStatus = { ...device.status, recording }
 
-  await supabase.updateDeviceStatus(deviceId, newStatus)
-  await supabase.logActivity(deviceId, `Grabación ${recording ? "iniciada" : "detenida"}`, device.status, newStatus)
+  try {
+    const response = await fetch(`/api/devices/${deviceId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    })
 
-  loadDevices()
+    if (response.ok) {
+      await loadDevices()
+    }
+  } catch (error) {
+    console.error("[v0] Error al actualizar cámara:", error)
+  }
 }
