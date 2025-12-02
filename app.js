@@ -308,15 +308,46 @@ function renderMotionSensorControl(device, status) {
  */
 function renderCameraControl(device, status) {
   const isRecording = status.recording || false
+  const cameraUrl = device.camera_url || null
+  const cameraType = device.camera_type || "demo"
 
-  return `
-        <div class="device-control">
-            <label class="control-label">Grabación</label>
-            <button class="btn btn-toggle ${isRecording ? "active" : "inactive"}" onclick="toggleCamera('${device.id}', ${!isRecording})">
-                ${isRecording ? "🔴 Grabando" : "⭕ Parada"}
-            </button>
+  let cameraHtml = ""
+
+  if (cameraUrl && cameraType === "ip") {
+    // Si es una cámara IP real, mostrar el stream
+    cameraHtml = `
+      <div class="device-control">
+        <label class="control-label">Stream en Vivo</label>
+        <div class="camera-preview">
+          <img src="/api/camera-proxy?device=${device.id}" alt="Stream de cámara" class="camera-stream" onerror="this.src='/camera-error.jpg'">
+          <div class="camera-status">${isRecording ? "🔴 Grabando" : "⭕ Sin grabar"}</div>
         </div>
+      </div>
     `
+  } else {
+    // Modo demo - mostrar placeholder
+    cameraHtml = `
+      <div class="device-control">
+        <label class="control-label">Modo Demo (Sin cámara conectada)</label>
+        <div class="camera-preview">
+          <div class="placeholder-camera">
+            📹 Conectar cámara IP
+          </div>
+        </div>
+      </div>
+    `
+  }
+
+  cameraHtml += `
+    <div class="device-control">
+      <label class="control-label">Grabación</label>
+      <button class="btn btn-toggle ${isRecording ? "active" : "inactive"}" onclick="toggleCamera('${device.id}', ${!isRecording})">
+        ${isRecording ? "🔴 Grabando" : "⭕ Parada"}
+      </button>
+    </div>
+  `
+
+  return cameraHtml
 }
 
 /**
