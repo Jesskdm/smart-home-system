@@ -313,25 +313,25 @@ function renderCameraControl(device, status) {
 
   let cameraHtml = ""
 
-  if (cameraUrl && cameraType === "ip") {
+  if (cameraUrl && cameraType !== "demo") {
     // Si es una cámara IP real, mostrar el stream
     cameraHtml = `
       <div class="device-control">
         <label class="control-label">Stream en Vivo</label>
         <div class="camera-preview">
-          <img src="/api/camera-proxy?device=${device.id}" alt="Stream de cámara" class="camera-stream" onerror="this.src='/camera-error.jpg'">
+          <img src="${cameraUrl}" alt="Stream de cámara" class="camera-stream" onerror="this.src='/camera-error.jpg'; this.style.width='100px';">
           <div class="camera-status">${isRecording ? "🔴 Grabando" : "⭕ Sin grabar"}</div>
         </div>
       </div>
     `
   } else {
-    // Modo demo - mostrar placeholder
+    // Modo demo - mostrar placeholder con opción de conectar
     cameraHtml = `
       <div class="device-control">
-        <label class="control-label">Modo Demo (Sin cámara conectada)</label>
+        <label class="control-label">Sin Configurar</label>
         <div class="camera-preview">
           <div class="placeholder-camera">
-            📹 Conectar cámara IP
+            📹 Click en + Agregar Cámara
           </div>
         </div>
       </div>
@@ -347,11 +347,21 @@ function renderCameraControl(device, status) {
     </div>
   `
 
+  if (device.camera_url) {
+    cameraHtml += `
+      <div class="device-control">
+        <button class="btn btn-secondary" style="width: 100%;" onclick="editCameraConfig('${device.id}')">
+          ⚙️ Editar Configuración
+        </button>
+      </div>
+    `
+  }
+
   return cameraHtml
 }
 
 /**
- * FUNCIONES DE CONTROL DE DISPOSITIVOS
+ * Funciones de control de dispositivos
  */
 
 async function toggleLight(deviceId, power) {
@@ -465,3 +475,79 @@ async function toggleCamera(deviceId, recording) {
     console.error("[v0] Error al actualizar cámara:", error)
   }
 }
+
+/**
+ * Funciones para gestionar configuración de cámaras
+ */
+
+function openCameraSetupModal() {
+  document.getElementById("camera-setup-modal").classList.remove("hidden")
+  document.getElementById("camera-setup-form").reset()
+}
+
+function closeCameraSetupModal() {
+  document.getElementById("camera-setup-modal").classList.add("hidden")
+}
+
+async function handleCameraSetup(event) {
+  event.preventDefault()
+
+  const name = document.getElementById("camera-name").value
+  const location = document.getElementById("camera-location").value
+  const cameraUrl = document.getElementById("camera-url").value
+  const username = document.getElementById("camera-username").value
+  const password = document.getElementById("camera-password").value
+  const cameraType = document.getElementById("camera-type").value
+
+  console.log("[v0] Guardando configuración de cámara...")
+
+  try {
+    const response = await fetch("/api/add-camera", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        location,
+        camera_url: cameraUrl,
+        camera_username: username,
+        camera_password: password,
+        camera_type: cameraType,
+      }),
+    })
+
+    const data = await response.json()
+
+    if (response.ok) {
+      console.log("[v0] Cámara guardada exitosamente")
+      closeCameraSetupModal()
+      await loadDevices()
+      alert("Cámara configurada correctamente")
+    } else {
+      console.error("[v0] Error al guardar cámara:", data.message)
+      alert("Error: " + (data.message || "No se pudo guardar la cámara"))
+    }
+  } catch (error) {
+    console.error("[v0] Error al conectar con el servidor:", error)
+    alert("Error de conexión: " + error.message)
+  }
+}
+
+function editCameraConfig(deviceId) {
+  const device = allDevices.find((d) => d.id === deviceId)
+  if (!device || !device.camera_url) return
+
+  document.getElementById("camera-name").value = device.name
+  document.getElementById("camera-location").value = device.location || ""
+  document.getElementById("camera-url").value = device.camera_url
+  document.getElementById("camera-username").value = device.camera_username || ""
+  document.getElementById("camera-password").value = device.camera_password || ""
+  document.getElementById("camera-type").value = device.camera_type || "ip"
+
+  openCameraSetupModal()
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeCameraSetupModal()
+  }
+})
