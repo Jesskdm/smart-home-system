@@ -63,7 +63,10 @@
 
             <!-- Section: Cámaras de Seguridad -->
             <section class="device-section">
-                <h2 class="section-title">📹 Cámaras de Seguridad</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+                    <h2 class="section-title" style="margin-bottom: 0; border-bottom: none;">📹 Cámaras de Seguridad</h2>
+                    <button class="btn btn-primary" onclick="openCameraSetupModal()">+ Agregar Cámara</button>
+                </div>
                 <div class="devices-grid" id="cameras-grid">
                     <div class="device-card loading">
                         <div class="spinner"></div>
@@ -71,6 +74,71 @@
                 </div>
             </section>
         </main>
+    </div>
+
+    <!-- Modal para configurar cámaras H-VIEW -->
+    <div id="camera-setup-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Configurar Cámara H-VIEW</h2>
+            <p>Ingresa los datos de tu cámara IP H-VIEW para conectarla</p>
+            
+            <form id="camera-setup-form" onsubmit="handleCameraSetup(event)">
+                <div class="form-group">
+                    <label>Nombre de la Cámara</label>
+                    <input type="text" id="camera-name" placeholder="Ej: Cámara Entrada" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Ubicación</label>
+                    <input type="text" id="camera-location" placeholder="Ej: Entrada, Garage, etc." required>
+                </div>
+
+                <div class="form-group">
+                    <label>URL de la Cámara</label>
+                    <input type="text" id="camera-url" placeholder="Ej: http://192.168.1.100:8080" required>
+                    <small style="color: var(--text-secondary); margin-top: 5px; display: block;">
+                        Usa http://IP:PUERTO o rtsp://usuario:contraseña@IP:554/stream1
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label>Usuario (opcional)</label>
+                    <input type="text" id="camera-username" placeholder="admin">
+                </div>
+
+                <div class="form-group">
+                    <label>Contraseña (opcional)</label>
+                    <input type="password" id="camera-password" placeholder="••••••••">
+                </div>
+
+                <div class="form-group">
+                    <label>Tipo de Cámara</label>
+                    <select id="camera-type" required style="width: 100%; padding: 10px; border: 1px solid var(--border); background-color: var(--surface-light); color: var(--text-primary); border-radius: 8px;">
+                        <option value="ip">Cámara IP (HTTP/RTSP)</option>
+                        <option value="rtsp">RTSP Stream</option>
+                        <option value="mjpeg">MJPEG Stream</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 30px;">
+                    <button type="submit" class="btn btn-success" style="flex: 1;">Guardar Cámara</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeCameraSetupModal()" style="flex: 1;">Cancelar</button>
+                </div>
+            </form>
+
+            <!-- Guía Rápida H-VIEW dentro del modal -->
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border); background-color: var(--surface-light); padding: 15px; border-radius: 8px;">
+                <h3 style="color: var(--text-primary); margin-bottom: 10px;">Guía Rápida H-VIEW</h3>
+                <ul style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.8; padding-left: 20px;">
+                    <li><strong>IP por defecto:</strong> 192.168.1.64 (varía según tu red)</li>
+                    <li><strong>Puerto HTTP:</strong> 8080 o 8081</li>
+                    <li><strong>Puerto RTSP:</strong> 554</li>
+                    <li><strong>Usuario/Pass por defecto:</strong> admin / 12345</li>
+                    <li><strong>URL HTTP:</strong> http://192.168.1.100:8080</li>
+                    <li><strong>URL RTSP:</strong> rtsp://admin:12345@192.168.1.100:554/stream1</li>
+                </ul>
+            </div>
+        </div>
     </div>
 
     <!-- Scripts -->
