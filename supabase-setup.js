@@ -129,16 +129,10 @@ class SupabaseClient {
   }
 
   /**
-   * Inicializa la conexión con Supabase 
-   *@param {string} url - https://vufsssdphryumshvvlcv.supabase.co
-   *@param {string} anonKey - eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1ZnNzc2RwaHJ5dW1zaHZ2bGN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1NTk4MzksImV4cCI6MjA4MDEzNTgzOX0.6SC5FULLxaOX_hei23VeVMp6zjJYU8I2LUakJ71H9mM
+   * Inicializa la conexión con Supabase
+   * @param {string} url - URL del proyecto Supabase
+   * @param {string} anonKey - Clave anón del proyecto
    */
-  import { createClient } from '@supabase/supabase-js'
-
-  const url = 'https://vufsssdphryumshvvlcv.supabase.co'
-  const anonKey = process.env.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1ZnNzc2RwaHJ5dW1zaHZ2bGN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1NTk4MzksImV4cCI6MjA4MDEzNTgzOX0.6SC5FULLxaOX_hei23VeVMp6zjJYU8I2LUakJ71H9mM
-  const supabase = createClient(url, anonKey)
-
   async initialize(url, anonKey) {
     try {
       if (!url || !anonKey || typeof url !== "string" || typeof anonKey !== "string") {
