@@ -403,6 +403,33 @@ body {
   border: 1px solid var(--border);
 }
 
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px;
+  font-size: 0.9rem;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+}
+
+.btn-delete:hover {
+  background: #fdecea;
+  color: var(--error);
+}
+
+.device-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* ===========================
    SLIDER
    =========================== */
@@ -475,6 +502,137 @@ body {
   background: #fdecea;
   color: var(--error);
   animation: pulse 1.5s infinite;
+}
+
+/* ===========================
+   COLOR PICKER
+   =========================== */
+.color-picker {
+  width: 40px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  padding: 2px;
+  background: var(--bg);
+}
+
+/* ===========================
+   SWITCH LABEL
+   =========================== */
+.switch-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.switch-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* ===========================
+   TEMP CONTROLS
+   =========================== */
+.temp-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.temp-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  min-width: 50px;
+  text-align: center;
+}
+
+/* ===========================
+   MODE SELECT
+   =========================== */
+.mode-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+/* ===========================
+   NAV COUNT BADGE
+   =========================== */
+.nav-count {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--surface);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.nav-item.active .nav-count {
+  background: rgba(255,255,255,0.2);
+  color: #ffffff;
+}
+
+/* ===========================
+   FORM CHECKBOXES
+   =========================== */
+.form-checkboxes {
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.form-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ===========================
+   CAMERA INFO BAR
+   =========================== */
+.camera-info-bar {
+  display: flex;
+  gap: 12px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.zoom-label {
+  display: flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 36px;
+  justify-content: center;
 }
 
 /* ===========================
