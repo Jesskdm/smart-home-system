@@ -8,179 +8,121 @@
 </head>
 <body>
     <div class="app-layout">
-        <!-- Sidebar Navigation -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <h2 class="sidebar-logo">Smart Home</h2>
-                <span id="connection-badge" class="badge badge-offline">Sin conexion</span>
+                <span id="connection-badge" class="badge badge-offline">Cargando</span>
             </div>
 
             <nav class="sidebar-nav">
                 <button class="nav-item active" data-section="lights" onclick="navigateTo('lights')">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>
                     <span>Luces</span>
+                    <span class="nav-count" id="count-lights">0</span>
                 </button>
                 <button class="nav-item" data-section="locks" onclick="navigateTo('locks')">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                     <span>Cerraduras</span>
+                    <span class="nav-count" id="count-locks">0</span>
                 </button>
                 <button class="nav-item" data-section="thermostats" onclick="navigateTo('thermostats')">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
                     <span>Termostato</span>
+                    <span class="nav-count" id="count-thermostats">0</span>
                 </button>
                 <button class="nav-item" data-section="sensors" onclick="navigateTo('sensors')">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h2"/><path d="M20 12h2"/><path d="M12 2v2"/><path d="M12 20v2"/><circle cx="12" cy="12" r="4"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="m17.66 4.93 1.41 1.41"/><path d="m4.93 17.66 1.41 1.41"/></svg>
                     <span>Sensores</span>
+                    <span class="nav-count" id="count-sensors">0</span>
                 </button>
                 <button class="nav-item" data-section="cameras" onclick="navigateTo('cameras')">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.934a.5.5 0 0 0-.777-.416L16 11"/><rect x="2" y="7" width="14" height="10" rx="2"/></svg>
                     <span>Camaras</span>
+                    <span class="nav-count" id="count-cameras">0</span>
                 </button>
             </nav>
-
-            <div class="sidebar-footer">
-                <button class="nav-item nav-item-subtle" onclick="toggleSidebar()">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-                    <span>Colapsar</span>
-                </button>
-            </div>
         </aside>
 
-        <!-- Main Content Area -->
         <main class="main-area">
-            <!-- Top bar mobile -->
             <header class="topbar">
                 <button class="topbar-menu" onclick="toggleSidebar()">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                 </button>
                 <h1 class="topbar-title" id="section-title">Luces</h1>
-                <span id="topbar-badge" class="badge badge-offline">Sin conexion</span>
+                <span id="topbar-badge" class="badge badge-offline">Cargando</span>
             </header>
 
-            <!-- Section: Luces -->
+            <!-- Luces -->
             <section class="content-section active" id="section-lights">
                 <div class="section-header">
-                    <div>
-                        <h2>Luces Inteligentes</h2>
-                        <p class="section-subtitle">Controla la iluminacion de tu hogar</p>
-                    </div>
-                    <button class="btn btn-primary" onclick="openAddDeviceModal('light')">+ Agregar Luz</button>
+                    <div><h2>Luces Inteligentes</h2><p class="section-subtitle">Controla la iluminacion de tu hogar</p></div>
+                    <button class="btn btn-primary" onclick="openAddDeviceModal('lights')">+ Agregar Luz</button>
                 </div>
-                <div class="devices-grid" id="lights-grid">
-                    <div class="empty-state" id="lights-empty">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>
-                        <p>No hay luces conectadas</p>
-                        <button class="btn btn-secondary" onclick="openAddDeviceModal('light')">Agregar primera luz</button>
-                    </div>
-                </div>
+                <div class="devices-grid" id="lights-grid"></div>
             </section>
 
-            <!-- Section: Cerraduras -->
+            <!-- Cerraduras -->
             <section class="content-section" id="section-locks">
                 <div class="section-header">
-                    <div>
-                        <h2>Cerraduras Inteligentes</h2>
-                        <p class="section-subtitle">Gestiona el acceso a tu hogar</p>
-                    </div>
-                    <button class="btn btn-primary" onclick="openAddDeviceModal('lock')">+ Agregar Cerradura</button>
+                    <div><h2>Cerraduras Inteligentes</h2><p class="section-subtitle">Gestiona el acceso a tu hogar</p></div>
+                    <button class="btn btn-primary" onclick="openAddDeviceModal('locks')">+ Agregar Cerradura</button>
                 </div>
-                <div class="devices-grid" id="locks-grid">
-                    <div class="empty-state" id="locks-empty">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                        <p>No hay cerraduras conectadas</p>
-                        <button class="btn btn-secondary" onclick="openAddDeviceModal('lock')">Agregar primera cerradura</button>
-                    </div>
-                </div>
+                <div class="devices-grid" id="locks-grid"></div>
             </section>
 
-            <!-- Section: Termostatos -->
+            <!-- Termostatos -->
             <section class="content-section" id="section-thermostats">
                 <div class="section-header">
-                    <div>
-                        <h2>Termostatos</h2>
-                        <p class="section-subtitle">Controla la temperatura de tu hogar</p>
-                    </div>
-                    <button class="btn btn-primary" onclick="openAddDeviceModal('thermostat')">+ Agregar Termostato</button>
+                    <div><h2>Termostatos</h2><p class="section-subtitle">Controla la temperatura de tu hogar</p></div>
+                    <button class="btn btn-primary" onclick="openAddDeviceModal('thermostats')">+ Agregar Termostato</button>
                 </div>
-                <div class="devices-grid" id="thermostats-grid">
-                    <div class="empty-state" id="thermostats-empty">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
-                        <p>No hay termostatos conectados</p>
-                        <button class="btn btn-secondary" onclick="openAddDeviceModal('thermostat')">Agregar primer termostato</button>
-                    </div>
-                </div>
+                <div class="devices-grid" id="thermostats-grid"></div>
             </section>
 
-            <!-- Section: Sensores -->
+            <!-- Sensores -->
             <section class="content-section" id="section-sensors">
                 <div class="section-header">
-                    <div>
-                        <h2>Sensores de Movimiento</h2>
-                        <p class="section-subtitle">Monitorea la actividad en tu hogar</p>
-                    </div>
-                    <button class="btn btn-primary" onclick="openAddDeviceModal('motion_sensor')">+ Agregar Sensor</button>
+                    <div><h2>Sensores de Movimiento</h2><p class="section-subtitle">Monitorea la actividad en tu hogar</p></div>
+                    <button class="btn btn-primary" onclick="openAddDeviceModal('sensors')">+ Agregar Sensor</button>
                 </div>
-                <div class="devices-grid" id="sensors-grid">
-                    <div class="empty-state" id="sensors-empty">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M2 12h2"/><path d="M20 12h2"/></svg>
-                        <p>No hay sensores conectados</p>
-                        <button class="btn btn-secondary" onclick="openAddDeviceModal('motion_sensor')">Agregar primer sensor</button>
-                    </div>
-                </div>
+                <div class="devices-grid" id="sensors-grid"></div>
             </section>
 
-            <!-- Section: Camaras -->
+            <!-- Camaras -->
             <section class="content-section" id="section-cameras">
                 <div class="section-header">
-                    <div>
-                        <h2>Camaras de Seguridad</h2>
-                        <p class="section-subtitle">Vigila tu hogar en tiempo real</p>
-                    </div>
+                    <div><h2>Camaras de Seguridad</h2><p class="section-subtitle">Vigila tu hogar en tiempo real</p></div>
                     <div class="camera-toolbar">
                         <div class="grid-toggle">
-                            <button class="grid-btn active" data-grid="1" onclick="setCameraGrid(1)" title="1x1">
-                                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-                            </button>
-                            <button class="grid-btn" data-grid="2" onclick="setCameraGrid(2)" title="2x2">
-                                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>
-                            </button>
-                            <button class="grid-btn" data-grid="3" onclick="setCameraGrid(3)" title="3x3">
-                                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><rect x="2" y="2" width="5.5" height="5.5" rx="1"/><rect x="9.25" y="2" width="5.5" height="5.5" rx="1"/><rect x="16.5" y="2" width="5.5" height="5.5" rx="1"/><rect x="2" y="9.25" width="5.5" height="5.5" rx="1"/><rect x="9.25" y="9.25" width="5.5" height="5.5" rx="1"/><rect x="16.5" y="9.25" width="5.5" height="5.5" rx="1"/><rect x="2" y="16.5" width="5.5" height="5.5" rx="1"/><rect x="9.25" y="16.5" width="5.5" height="5.5" rx="1"/><rect x="16.5" y="16.5" width="5.5" height="5.5" rx="1"/></svg>
-                            </button>
+                            <button class="grid-btn active" data-grid="1" onclick="setCameraGrid(1)" title="1x1">1x1</button>
+                            <button class="grid-btn" data-grid="2" onclick="setCameraGrid(2)" title="2x2">2x2</button>
+                            <button class="grid-btn" data-grid="3" onclick="setCameraGrid(3)" title="3x3">3x3</button>
                         </div>
                         <button class="btn btn-primary" onclick="openCameraSetupModal()">+ Agregar Camara</button>
                     </div>
                 </div>
-                <div class="cameras-grid grid-1" id="cameras-grid">
-                    <div class="empty-state" id="cameras-empty">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.934a.5.5 0 0 0-.777-.416L16 11"/><rect x="2" y="7" width="14" height="10" rx="2"/></svg>
-                        <p>No hay camaras conectadas</p>
-                        <button class="btn btn-secondary" onclick="openCameraSetupModal()">Agregar primera camara</button>
-                    </div>
-                </div>
+                <div class="cameras-grid grid-1" id="cameras-grid"></div>
             </section>
         </main>
     </div>
 
-    <!-- Modal: Agregar Dispositivo Generico -->
+    <!-- Modal: Agregar Dispositivo -->
     <div id="add-device-modal" class="modal hidden">
         <div class="modal-overlay" onclick="closeAddDeviceModal()"></div>
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="add-device-title">Agregar Dispositivo</h2>
-                <button class="modal-close" onclick="closeAddDeviceModal()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
+                <button class="modal-close" onclick="closeAddDeviceModal()">&#x2715;</button>
             </div>
             <form id="add-device-form" onsubmit="handleAddDevice(event)">
-                <input type="hidden" id="device-type-input">
+                <input type="hidden" id="device-section-input">
                 <div class="form-group">
-                    <label>Nombre</label>
+                    <label for="device-name">Nombre</label>
                     <input type="text" id="device-name" placeholder="Ej: Luz Sala" required>
                 </div>
                 <div class="form-group">
-                    <label>Ubicacion</label>
-                    <input type="text" id="device-location" placeholder="Ej: Sala, Dormitorio, Garage" required>
+                    <label for="device-location">Ubicacion</label>
+                    <input type="text" id="device-location" placeholder="Ej: Sala, Cocina, Garage" required>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-ghost" onclick="closeAddDeviceModal()">Cancelar</button>
@@ -190,57 +132,72 @@
         </div>
     </div>
 
-    <!-- Modal: Configurar Camara H-VIEW -->
+    <!-- Modal: Configurar Camara -->
     <div id="camera-setup-modal" class="modal hidden">
         <div class="modal-overlay" onclick="closeCameraSetupModal()"></div>
         <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h2>Configurar Camara H-VIEW</h2>
-                <button class="modal-close" onclick="closeCameraSetupModal()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
+                <h2>Configurar Camara</h2>
+                <button class="modal-close" onclick="closeCameraSetupModal()">&#x2715;</button>
             </div>
             <form id="camera-setup-form" onsubmit="handleCameraSetup(event)">
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Nombre</label>
+                        <label for="camera-name">Nombre</label>
                         <input type="text" id="camera-name" placeholder="Ej: Camara Entrada" required>
                     </div>
                     <div class="form-group">
-                        <label>Ubicacion</label>
-                        <input type="text" id="camera-location" placeholder="Ej: Entrada" required>
+                        <label for="camera-location">Ubicacion</label>
+                        <input type="text" id="camera-location" placeholder="Ej: Entrada principal" required>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>URL de la Camara</label>
-                    <input type="text" id="camera-url" placeholder="http://192.168.1.100:8080" required>
-                    <small>HTTP: http://IP:PUERTO | RTSP: rtsp://user:pass@IP:554/stream1</small>
+                    <label for="camera-stream-url">URL del Stream</label>
+                    <input type="text" id="camera-stream-url" placeholder="rtsp://admin:12345@192.168.1.64:554/stream1">
+                    <small class="form-hint">H-VIEW RTSP: rtsp://user:pass@IP:554/stream1</small>
+                </div>
+                <div class="form-group">
+                    <label for="camera-snapshot-url">URL de Snapshot (imagen)</label>
+                    <input type="text" id="camera-snapshot-url" placeholder="http://192.168.1.64:8080/snapshot.jpg">
+                    <small class="form-hint">H-VIEW HTTP: http://IP:8080/snapshot.jpg</small>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Usuario</label>
+                        <label for="camera-username">Usuario</label>
                         <input type="text" id="camera-username" placeholder="admin">
                     </div>
                     <div class="form-group">
-                        <label>Contrasena</label>
-                        <input type="password" id="camera-password" placeholder="********">
+                        <label for="camera-password">Contrasena</label>
+                        <input type="password" id="camera-password" placeholder="12345">
                     </div>
                 </div>
-                <div class="form-group">
-                    <label>Tipo de Stream</label>
-                    <select id="camera-type" required>
-                        <option value="ip">Camara IP (HTTP/RTSP)</option>
-                        <option value="rtsp">RTSP Stream</option>
-                        <option value="mjpeg">MJPEG Stream</option>
-                    </select>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="camera-brand">Marca</label>
+                        <input type="text" id="camera-brand" value="H-VIEW" placeholder="H-VIEW">
+                    </div>
+                    <div class="form-group">
+                        <label for="camera-resolution">Resolucion</label>
+                        <select id="camera-resolution">
+                            <option value="720p">720p</option>
+                            <option value="1080p" selected>1080p</option>
+                            <option value="2K">2K</option>
+                            <option value="4K">4K</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row form-checkboxes">
+                    <label class="checkbox-label"><input type="checkbox" id="camera-has-audio"> Audio</label>
+                    <label class="checkbox-label"><input type="checkbox" id="camera-has-mic"> Microfono</label>
+                    <label class="checkbox-label"><input type="checkbox" id="camera-has-nightvision"> Vision nocturna</label>
                 </div>
                 <div class="info-box">
-                    <strong>Guia H-VIEW</strong>
+                    <strong>H-VIEW - Datos por defecto</strong>
                     <ul>
-                        <li>IP por defecto: 192.168.1.64</li>
-                        <li>Puerto HTTP: 8080 | RTSP: 554</li>
-                        <li>Usuario/Pass: admin / 12345</li>
-                        <li>RTSP: rtsp://admin:12345@IP:554/stream1</li>
+                        <li>IP: 192.168.1.64</li>
+                        <li>Puerto HTTP: 8080 | Puerto RTSP: 554</li>
+                        <li>Usuario: admin | Contrasena: 12345</li>
+                        <li>Stream: rtsp://admin:12345@192.168.1.64:554/stream1</li>
                     </ul>
                 </div>
                 <div class="modal-actions">
@@ -251,15 +208,14 @@
         </div>
     </div>
 
-    <!-- Modal: Vista Individual de Camara -->
+    <!-- Modal: Vista Camara Individual -->
     <div id="camera-view-modal" class="modal hidden">
         <div class="modal-overlay" onclick="closeCameraViewModal()"></div>
         <div class="modal-content modal-fullscreen">
             <div class="modal-header">
                 <h2 id="camera-view-title">Camara</h2>
-                <button class="modal-close" onclick="closeCameraViewModal()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
+                <div id="camera-info-bar" class="camera-info-bar"></div>
+                <button class="modal-close" onclick="closeCameraViewModal()">&#x2715;</button>
             </div>
             <div class="camera-fullview">
                 <div class="camera-feed" id="camera-feed-full">
@@ -267,27 +223,28 @@
                 </div>
                 <div class="camera-controls">
                     <button class="cam-ctrl-btn" id="btn-mic" onclick="toggleCameraMic()" title="Microfono">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-                        <span>Microfono</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                        <span>Mic</span>
                     </button>
                     <button class="cam-ctrl-btn" id="btn-audio" onclick="toggleCameraAudio()" title="Audio">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
                         <span>Audio</span>
                     </button>
-                    <button class="cam-ctrl-btn" id="btn-zoom-in" onclick="zoomCamera(1)" title="Zoom In">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                    <button class="cam-ctrl-btn" onclick="zoomCamera(1)" title="Zoom +">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
                         <span>Zoom +</span>
                     </button>
-                    <button class="cam-ctrl-btn" id="btn-zoom-out" onclick="zoomCamera(-1)" title="Zoom Out">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                    <span class="zoom-label" id="zoom-label">1.0x</span>
+                    <button class="cam-ctrl-btn" onclick="zoomCamera(-1)" title="Zoom -">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
                         <span>Zoom -</span>
                     </button>
                     <button class="cam-ctrl-btn" id="btn-record" onclick="toggleCameraRecording()" title="Grabar">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
                         <span>Grabar</span>
                     </button>
-                    <button class="cam-ctrl-btn" id="btn-settings" onclick="editCameraConfig(currentCameraId)" title="Configuracion">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                    <button class="cam-ctrl-btn" onclick="editCameraConfig(currentCameraId)" title="Ajustes">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
                         <span>Ajustes</span>
                     </button>
                 </div>
