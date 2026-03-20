@@ -91,8 +91,20 @@
             <!-- Camaras -->
             <section class="content-section" id="section-cameras">
                 <div class="section-header">
-                    <div><h2>Camaras de Seguridad</h2><p class="section-subtitle">Vigila tu hogar en tiempo real</p></div>
+                    <div>
+                        <h2>Camaras de Seguridad</h2>
+                        <p class="section-subtitle">Vigila tu hogar en tiempo real con WebRTC</p>
+                    </div>
                     <div class="camera-toolbar">
+                        <div class="webrtc-status-container">
+                            <span id="webrtc-status" class="webrtc-status disconnected">WebRTC Desconectado</span>
+                            <button class="btn btn-icon-sm" onclick="openWebRTCSettings()" title="Configurar WebRTC">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                    <circle cx="12" cy="12" r="3"/>
+                                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                                </svg>
+                            </button>
+                        </div>
                         <div class="grid-toggle">
                             <button class="grid-btn active" data-grid="1" onclick="setCameraGrid(1)" title="1x1">1x1</button>
                             <button class="grid-btn" data-grid="2" onclick="setCameraGrid(2)" title="2x2">2x2</button>
@@ -186,18 +198,60 @@
                         </select>
                     </div>
                 </div>
+                <div class="form-group">
+                    <label>Tipo de Conexion</label>
+                    <div class="connection-type-selector">
+                        <label class="radio-card">
+                            <input type="radio" name="connection-type" value="webrtc" id="conn-webrtc" checked>
+                            <div class="radio-card-content">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                                    <line x1="9" y1="9" x2="9.01" y2="9"/>
+                                    <line x1="15" y1="9" x2="15.01" y2="9"/>
+                                </svg>
+                                <span>WebRTC</span>
+                                <small>Streaming en vivo</small>
+                            </div>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="connection-type" value="local" id="conn-local">
+                            <div class="radio-card-content">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                    <line x1="8" y1="21" x2="16" y2="21"/>
+                                    <line x1="12" y1="17" x2="12" y2="21"/>
+                                </svg>
+                                <span>Camara Local</span>
+                                <small>Webcam del dispositivo</small>
+                            </div>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="connection-type" value="snapshot" id="conn-snapshot">
+                            <div class="radio-card-content">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                                    <path d="M21 15l-5-5L5 21"/>
+                                </svg>
+                                <span>Snapshot HTTP</span>
+                                <small>Imagen estatica</small>
+                            </div>
+                        </label>
+                    </div>
+                </div>
                 <div class="form-row form-checkboxes">
                     <label class="checkbox-label"><input type="checkbox" id="camera-has-audio"> Audio</label>
                     <label class="checkbox-label"><input type="checkbox" id="camera-has-mic"> Microfono</label>
                     <label class="checkbox-label"><input type="checkbox" id="camera-has-nightvision"> Vision nocturna</label>
                 </div>
                 <div class="info-box">
-                    <strong>H-VIEW - Datos por defecto</strong>
+                    <strong>Configuracion WebRTC</strong>
                     <ul>
-                        <li>IP: 192.168.1.64</li>
-                        <li>Puerto HTTP: 8080 | Puerto RTSP: 554</li>
-                        <li>Usuario: admin | Contrasena: 12345</li>
-                        <li>Stream: rtsp://admin:12345@192.168.1.64:554/stream1</li>
+                        <li>WebRTC permite streaming en tiempo real de camaras IP</li>
+                        <li>Requiere un servidor de senalizacion configurado</li>
+                        <li>Para camaras locales (webcam), selecciona "Camara Local"</li>
+                        <li>Las URLs RTSP no funcionan directamente en navegadores</li>
                     </ul>
                 </div>
                 <div class="modal-actions">
@@ -249,6 +303,54 @@
                     </button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal: Configuracion WebRTC -->
+    <div id="webrtc-settings-modal" class="modal hidden">
+        <div class="modal-overlay" onclick="closeWebRTCSettings()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Configuracion WebRTC</h2>
+                <button class="modal-close" onclick="closeWebRTCSettings()">&#x2715;</button>
+            </div>
+            <div class="webrtc-info-banner">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="16" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <span>WebRTC permite visualizar streams de video en tiempo real directamente en el navegador.</span>
+            </div>
+            <form id="webrtc-settings-form" onsubmit="event.preventDefault(); saveWebRTCSettings();">
+                <div class="form-group">
+                    <label for="signaling-server-url">Servidor de Senalizacion</label>
+                    <input type="text" id="signaling-server-url" placeholder="ws://localhost:8080" value="ws://localhost:8080">
+                    <small class="form-hint">URL del servidor WebSocket para senalizacion WebRTC</small>
+                </div>
+                <div class="info-box">
+                    <strong>Como funciona WebRTC</strong>
+                    <ul>
+                        <li>El servidor de senalizacion coordina la conexion peer-to-peer</li>
+                        <li>Los streams de video se transmiten directamente entre dispositivos</li>
+                        <li>Soporta audio bidireccional si la camara tiene microfono</li>
+                        <li>Usa servidores STUN para atravesar NAT/firewalls</li>
+                    </ul>
+                </div>
+                <div class="info-box">
+                    <strong>Servidores STUN configurados</strong>
+                    <ul>
+                        <li>stun:stun.l.google.com:19302</li>
+                        <li>stun:stun1.l.google.com:19302</li>
+                        <li>stun:stun2.l.google.com:19302</li>
+                    </ul>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-ghost" onclick="closeWebRTCSettings()">Cancelar</button>
+                    <button type="button" class="btn btn-secondary" onclick="initSignalingConnection()">Reconectar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
         </div>
     </div>
 

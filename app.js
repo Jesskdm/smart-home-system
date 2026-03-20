@@ -31,6 +31,26 @@ let cameraAudioActive = false;
 let supabaseReady = false;
 
 // ===========================
+// WEBRTC CONFIGURATION
+// ===========================
+const webrtcConnections = new Map();
+const localStreams = new Map();
+
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+  ],
+};
+
+// WebRTC Signaling Server URL (configurable)
+let SIGNALING_SERVER_URL = "ws://localhost:8080";
+
+// WebSocket connection for signaling
+let signalingSocket = null;
+
+// ===========================
 // SUPABASE HELPERS
 // ===========================
 function sbHeaders() {
@@ -324,21 +344,53 @@ function createDeviceCard(section, device) {
 function createCameraCard(cam) {
   const card = document.createElement("div");
   card.className = "camera-card";
+  card.setAttribute("data-camera-id", cam.id);
   card.onclick = () => openCameraView(cam.id);
 
-  const hasUrl = cam.stream_url || cam.snapshot_url;
+  const isWebRTC = cam.connection_type === "webrtc" || cam.use_local_camera;
 
   card.innerHTML = `
     <div class="camera-feed-preview">
-      ${hasUrl ? `<img src="${cam.snapshot_url || cam.stream_url}" alt="${cam.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'"><div class="camera-no-signal" style="display:none">Sin senal</div>` : `<div class="camera-no-signal">Sin configurar</div>`}
+      ${isWebRTC ? `
+        <video class="camera-video-preview" data-camera-id="${cam.id}" autoplay muted playsinline></video>
+        <div class="camera-no-signal" style="display:none">Sin senal</div>
+      ` : cam.snapshot_url ? `
+        <img src="${cam.snapshot_url}" alt="${cam.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+        <div class="camera-no-signal" style="display:none">Sin senal</div>
+      ` : `
+        <div class="camera-no-signal">
+          <span class="no-signal-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32">
+              <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.934a.5.5 0 0 0-.777-.416L16 11"/>
+              <rect x="2" y="7" width="14" height="10" rx="2"/>
+              <line x1="2" y1="2" x2="22" y2="22" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span>Sin configurar</span>
+        </div>
+      `}
       <div class="camera-card-overlay">
         <div>
           <div class="camera-card-name">${cam.name}</div>
           <div class="camera-card-location">${cam.location || ""} | ${cam.camera_brand || "---"} | ${cam.resolution || "---"}</div>
         </div>
-        <div class="camera-rec-dot ${cam.is_recording ? "" : "off"}"></div>
+        <div class="camera-status-badges">
+          ${cam.connection_type === "webrtc" ? '<span class="camera-badge webrtc">WebRTC</span>' : ''}
+          ${cam.use_local_camera ? '<span class="camera-badge local">Local</span>' : ''}
+          <div class="camera-rec-dot ${cam.is_recording ? "" : "off"}"></div>
+        </div>
       </div>
     </div>`;
+
+  // Iniciar conexion WebRTC si es necesario
+  if (isWebRTC) {
+    setTimeout(() => {
+      const videoEl = card.querySelector("video");
+      if (videoEl) {
+        connectCamera(cam.id, videoEl);
+      }
+    }, 100);
+  }
 
   return card;
 }
@@ -366,12 +418,37 @@ function openCameraView(camId) {
   document.getElementById("camera-view-title").textContent = cam.name + " - " + (cam.location || "");
 
   const feed = document.getElementById("camera-feed-full");
-  const hasUrl = cam.stream_url || cam.snapshot_url;
+  const isWebRTC = cam.connection_type === "webrtc" || cam.use_local_camera;
 
-  if (hasUrl) {
-    feed.innerHTML = `<img id="camera-full-img" src="${cam.stream_url || cam.snapshot_url}" alt="${cam.name}" style="transform:scale(1)" onerror="this.outerHTML='<div class=\\'camera-placeholder-full\\'>Error de conexion</div>'">`;
+  if (isWebRTC) {
+    feed.innerHTML = `
+      <video id="camera-full-video" data-camera-id="${cam.id}" autoplay playsinline style="transform:scale(1)"></video>
+      <div class="camera-placeholder-full" style="display:none">Conectando...</div>
+    `;
+    
+    const videoEl = document.getElementById("camera-full-video");
+    
+    // Verificar si ya hay un stream activo para esta camara
+    const existingStream = localStreams.get(camId);
+    if (existingStream) {
+      videoEl.srcObject = existingStream;
+      videoEl.play().catch(e => console.log("[WebRTC] Autoplay bloqueado:", e));
+    } else {
+      connectCamera(camId, videoEl);
+    }
+  } else if (cam.snapshot_url) {
+    feed.innerHTML = `<img id="camera-full-img" src="${cam.snapshot_url}" alt="${cam.name}" style="transform:scale(1)" onerror="this.outerHTML='<div class=\\'camera-placeholder-full\\'>Error de conexion</div>'">`;
   } else {
-    feed.innerHTML = '<div class="camera-placeholder-full">Camara sin configurar<br>Haz click en Ajustes para conectarla</div>';
+    feed.innerHTML = `
+      <div class="camera-placeholder-full">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48">
+          <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.934a.5.5 0 0 0-.777-.416L16 11"/>
+          <rect x="2" y="7" width="14" height="10" rx="2"/>
+        </svg>
+        <span>Camara sin configurar</span>
+        <span class="placeholder-hint">Haz click en Ajustes para conectarla</span>
+      </div>
+    `;
   }
 
   const btnMic = document.getElementById("btn-mic");
@@ -390,13 +467,26 @@ function openCameraView(camId) {
 
   const info = document.getElementById("camera-info-bar");
   if (info) {
-    info.innerHTML = `<span>${cam.camera_brand || "---"}</span><span>${cam.resolution || "---"}</span><span>${cam.has_night_vision ? "Vision nocturna" : ""}</span>`;
+    const connectionType = isWebRTC ? (cam.use_local_camera ? "Local" : "WebRTC") : "HTTP";
+    info.innerHTML = `
+      <span>${cam.camera_brand || "---"}</span>
+      <span>${cam.resolution || "---"}</span>
+      <span class="connection-type ${connectionType.toLowerCase()}">${connectionType}</span>
+      ${cam.has_night_vision ? '<span>Vision nocturna</span>' : ''}
+    `;
   }
 
   document.getElementById("camera-view-modal").classList.remove("hidden");
 }
 
 function closeCameraViewModal() {
+  // Pausar video si existe
+  const video = document.getElementById("camera-full-video");
+  if (video) {
+    video.pause();
+    // No detener el stream, solo pausar para permitir reconexion rapida
+  }
+  
   document.getElementById("camera-view-modal").classList.add("hidden");
   currentCameraId = null;
 }
@@ -413,8 +503,14 @@ function toggleCameraAudio() {
 
 function zoomCamera(direction) {
   cameraZoomLevel = Math.max(1, Math.min(4, cameraZoomLevel + direction * 0.5));
+  
+  // Aplicar zoom a imagen o video
   const img = document.getElementById("camera-full-img");
+  const video = document.getElementById("camera-full-video");
+  
   if (img) img.style.transform = "scale(" + cameraZoomLevel + ")";
+  if (video) video.style.transform = "scale(" + cameraZoomLevel + ")";
+  
   const label = document.getElementById("zoom-label");
   if (label) label.textContent = cameraZoomLevel.toFixed(1) + "x";
 }
@@ -557,6 +653,9 @@ function closeCameraSetupModal() {
 async function handleCameraSetup(event) {
   event.preventDefault();
 
+  // Obtener tipo de conexion seleccionado
+  const connectionType = document.querySelector('input[name="connection-type"]:checked')?.value || "webrtc";
+
   const row = {
     name: document.getElementById("camera-name").value.trim(),
     location: document.getElementById("camera-location").value.trim(),
@@ -570,6 +669,8 @@ async function handleCameraSetup(event) {
     has_mic: document.getElementById("camera-has-mic").checked,
     has_night_vision: document.getElementById("camera-has-nightvision").checked,
     is_recording: false,
+    connection_type: connectionType,
+    use_local_camera: connectionType === "local",
   };
 
   if (!row.name) return;
@@ -615,4 +716,386 @@ document.addEventListener("keydown", (e) => {
     closeCameraSetupModal();
     closeAddDeviceModal();
   }
+});
+
+// ===========================
+// WEBRTC FUNCTIONS
+// ===========================
+
+/**
+ * Inicializa la conexion WebSocket para senalizacion WebRTC
+ */
+function initSignalingConnection() {
+  if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
+    return;
+  }
+
+  signalingSocket = new WebSocket(SIGNALING_SERVER_URL);
+
+  signalingSocket.onopen = () => {
+    console.log("[WebRTC] Conectado al servidor de senalizacion");
+    updateWebRTCStatus(true);
+  };
+
+  signalingSocket.onclose = () => {
+    console.log("[WebRTC] Desconectado del servidor de senalizacion");
+    updateWebRTCStatus(false);
+    // Reconectar despues de 5 segundos
+    setTimeout(initSignalingConnection, 5000);
+  };
+
+  signalingSocket.onerror = (error) => {
+    console.error("[WebRTC] Error de conexion:", error);
+    updateWebRTCStatus(false);
+  };
+
+  signalingSocket.onmessage = async (event) => {
+    const message = JSON.parse(event.data);
+    await handleSignalingMessage(message);
+  };
+}
+
+/**
+ * Maneja mensajes de senalizacion entrantes
+ */
+async function handleSignalingMessage(message) {
+  const { type, cameraId, data: msgData } = message;
+
+  switch (type) {
+    case "offer":
+      await handleOffer(cameraId, msgData);
+      break;
+    case "answer":
+      await handleAnswer(cameraId, msgData);
+      break;
+    case "ice-candidate":
+      await handleIceCandidate(cameraId, msgData);
+      break;
+    case "camera-stream-ready":
+      console.log("[WebRTC] Stream de camara listo:", cameraId);
+      break;
+  }
+}
+
+/**
+ * Inicia una conexion WebRTC para una camara
+ */
+async function startWebRTCConnection(cameraId, videoElement) {
+  // Limpiar conexion existente
+  stopWebRTCConnection(cameraId);
+
+  const peerConnection = new RTCPeerConnection(ICE_SERVERS);
+  webrtcConnections.set(cameraId, peerConnection);
+
+  // Configurar manejo de tracks entrantes
+  peerConnection.ontrack = (event) => {
+    console.log("[WebRTC] Track recibido para camara:", cameraId);
+    if (videoElement && event.streams[0]) {
+      videoElement.srcObject = event.streams[0];
+      videoElement.play().catch((e) => console.log("[WebRTC] Autoplay bloqueado:", e));
+    }
+  };
+
+  // Manejar candidatos ICE
+  peerConnection.onicecandidate = (event) => {
+    if (event.candidate && signalingSocket?.readyState === WebSocket.OPEN) {
+      signalingSocket.send(
+        JSON.stringify({
+          type: "ice-candidate",
+          cameraId: cameraId,
+          data: event.candidate,
+        })
+      );
+    }
+  };
+
+  // Monitorear estado de conexion
+  peerConnection.onconnectionstatechange = () => {
+    console.log("[WebRTC] Estado de conexion:", peerConnection.connectionState);
+    updateCameraConnectionStatus(cameraId, peerConnection.connectionState);
+  };
+
+  // Solicitar stream al servidor
+  if (signalingSocket?.readyState === WebSocket.OPEN) {
+    signalingSocket.send(
+      JSON.stringify({
+        type: "request-stream",
+        cameraId: cameraId,
+      })
+    );
+  }
+
+  return peerConnection;
+}
+
+/**
+ * Maneja una oferta SDP recibida
+ */
+async function handleOffer(cameraId, offer) {
+  const peerConnection = webrtcConnections.get(cameraId);
+  if (!peerConnection) return;
+
+  try {
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+
+    if (signalingSocket?.readyState === WebSocket.OPEN) {
+      signalingSocket.send(
+        JSON.stringify({
+          type: "answer",
+          cameraId: cameraId,
+          data: answer,
+        })
+      );
+    }
+  } catch (error) {
+    console.error("[WebRTC] Error manejando oferta:", error);
+  }
+}
+
+/**
+ * Maneja una respuesta SDP recibida
+ */
+async function handleAnswer(cameraId, answer) {
+  const peerConnection = webrtcConnections.get(cameraId);
+  if (!peerConnection) return;
+
+  try {
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+  } catch (error) {
+    console.error("[WebRTC] Error manejando respuesta:", error);
+  }
+}
+
+/**
+ * Maneja un candidato ICE recibido
+ */
+async function handleIceCandidate(cameraId, candidate) {
+  const peerConnection = webrtcConnections.get(cameraId);
+  if (!peerConnection) return;
+
+  try {
+    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+  } catch (error) {
+    console.error("[WebRTC] Error agregando candidato ICE:", error);
+  }
+}
+
+/**
+ * Detiene una conexion WebRTC
+ */
+function stopWebRTCConnection(cameraId) {
+  const peerConnection = webrtcConnections.get(cameraId);
+  if (peerConnection) {
+    peerConnection.close();
+    webrtcConnections.delete(cameraId);
+  }
+
+  const localStream = localStreams.get(cameraId);
+  if (localStream) {
+    localStream.getTracks().forEach((track) => track.stop());
+    localStreams.delete(cameraId);
+  }
+}
+
+/**
+ * Actualiza el estado de conexion WebRTC en la UI
+ */
+function updateWebRTCStatus(connected) {
+  const statusEl = document.getElementById("webrtc-status");
+  if (statusEl) {
+    statusEl.className = connected ? "webrtc-status connected" : "webrtc-status disconnected";
+    statusEl.textContent = connected ? "WebRTC Activo" : "WebRTC Desconectado";
+  }
+}
+
+/**
+ * Actualiza el estado de conexion de una camara
+ */
+function updateCameraConnectionStatus(cameraId, state) {
+  const indicator = document.querySelector(`[data-camera-id="${cameraId}"] .connection-indicator`);
+  if (indicator) {
+    indicator.className = `connection-indicator ${state}`;
+  }
+}
+
+/**
+ * Intenta conectar usando getUserMedia como fallback (camara local/dispositivo)
+ */
+async function tryLocalCameraFallback(cameraId, videoElement) {
+  const cam = data.cameras.find((c) => c.id === cameraId);
+  if (!cam) return false;
+
+  // Si es una camara local (webcam del dispositivo)
+  if (cam.camera_type === "local" || cam.use_local_camera) {
+    try {
+      const constraints = {
+        video: {
+          width: { ideal: cam.resolution === "4K" ? 3840 : cam.resolution === "2K" ? 2560 : cam.resolution === "1080p" ? 1920 : 1280 },
+          height: { ideal: cam.resolution === "4K" ? 2160 : cam.resolution === "2K" ? 1440 : cam.resolution === "1080p" ? 1080 : 720 },
+        },
+        audio: cam.has_audio || false,
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      localStreams.set(cameraId, stream);
+      videoElement.srcObject = stream;
+      await videoElement.play();
+      console.log("[WebRTC] Camara local conectada:", cameraId);
+      return true;
+    } catch (error) {
+      console.error("[WebRTC] Error accediendo camara local:", error);
+      return false;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Conecta una camara usando el mejor metodo disponible
+ */
+async function connectCamera(cameraId, videoElement) {
+  const cam = data.cameras.find((c) => c.id === cameraId);
+  if (!cam) return;
+
+  // Mostrar estado de carga
+  showCameraLoading(cameraId, true);
+
+  // 1. Intentar con camara local primero
+  if (await tryLocalCameraFallback(cameraId, videoElement)) {
+    showCameraLoading(cameraId, false);
+    return;
+  }
+
+  // 2. Intentar conexion WebRTC
+  if (signalingSocket?.readyState === WebSocket.OPEN) {
+    await startWebRTCConnection(cameraId, videoElement);
+    showCameraLoading(cameraId, false);
+    return;
+  }
+
+  // 3. Fallback: Intentar imagen estatica si hay snapshot_url
+  if (cam.snapshot_url) {
+    showCameraSnapshot(cameraId, cam.snapshot_url);
+    showCameraLoading(cameraId, false);
+    return;
+  }
+
+  // 4. Mostrar error de conexion
+  showCameraError(cameraId, "No se pudo conectar a la camara");
+  showCameraLoading(cameraId, false);
+}
+
+/**
+ * Muestra estado de carga para una camara
+ */
+function showCameraLoading(cameraId, loading) {
+  const container = document.querySelector(`[data-camera-id="${cameraId}"]`);
+  if (!container) return;
+
+  let loader = container.querySelector(".camera-loader");
+  if (loading && !loader) {
+    loader = document.createElement("div");
+    loader.className = "camera-loader";
+    loader.innerHTML = '<div class="loader-spinner"></div><span>Conectando...</span>';
+    container.appendChild(loader);
+  } else if (!loading && loader) {
+    loader.remove();
+  }
+}
+
+/**
+ * Muestra un snapshot estatico de la camara
+ */
+function showCameraSnapshot(cameraId, snapshotUrl) {
+  const container = document.querySelector(`[data-camera-id="${cameraId}"]`);
+  if (!container) return;
+
+  const video = container.querySelector("video");
+  if (video) {
+    video.style.display = "none";
+  }
+
+  let img = container.querySelector("img.camera-snapshot");
+  if (!img) {
+    img = document.createElement("img");
+    img.className = "camera-snapshot";
+    container.appendChild(img);
+  }
+  img.src = snapshotUrl;
+  img.alt = "Camera snapshot";
+}
+
+/**
+ * Muestra error de conexion
+ */
+function showCameraError(cameraId, message) {
+  const container = document.querySelector(`[data-camera-id="${cameraId}"]`);
+  if (!container) return;
+
+  let errorEl = container.querySelector(".camera-error");
+  if (!errorEl) {
+    errorEl = document.createElement("div");
+    errorEl.className = "camera-error";
+    container.appendChild(errorEl);
+  }
+  errorEl.innerHTML = `<span class="error-icon">!</span><span>${message}</span>`;
+}
+
+/**
+ * Configura el servidor de senalizacion
+ */
+function setSignalingServer(url) {
+  SIGNALING_SERVER_URL = url;
+  if (signalingSocket) {
+    signalingSocket.close();
+  }
+  initSignalingConnection();
+}
+
+/**
+ * Obtiene dispositivos de camara disponibles
+ */
+async function getAvailableCameras() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.filter((device) => device.kind === "videoinput");
+  } catch (error) {
+    console.error("[WebRTC] Error enumerando dispositivos:", error);
+    return [];
+  }
+}
+
+/**
+ * Abre modal para configurar servidor WebRTC
+ */
+function openWebRTCSettings() {
+  document.getElementById("webrtc-settings-modal").classList.remove("hidden");
+  document.getElementById("signaling-server-url").value = SIGNALING_SERVER_URL;
+}
+
+function closeWebRTCSettings() {
+  document.getElementById("webrtc-settings-modal").classList.add("hidden");
+}
+
+function saveWebRTCSettings() {
+  const url = document.getElementById("signaling-server-url").value.trim();
+  if (url) {
+    setSignalingServer(url);
+    localStorage.setItem("webrtc-signaling-server", url);
+  }
+  closeWebRTCSettings();
+}
+
+// Cargar configuracion guardada al iniciar
+document.addEventListener("DOMContentLoaded", () => {
+  const savedServer = localStorage.getItem("webrtc-signaling-server");
+  if (savedServer) {
+    SIGNALING_SERVER_URL = savedServer;
+  }
+  
+  // Intentar conectar al servidor de senalizacion
+  initSignalingConnection();
 });

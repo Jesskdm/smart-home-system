@@ -1018,6 +1018,299 @@ select {
 }
 
 /* ===========================
+   WEBRTC STYLES
+   =========================== */
+.webrtc-status-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.webrtc-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.webrtc-status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+
+.webrtc-status.connected {
+  background: #e8f5e9;
+  color: var(--success);
+}
+
+.webrtc-status.connected::before {
+  background: var(--success);
+}
+
+.webrtc-status.disconnected {
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.webrtc-status.disconnected::before {
+  background: var(--text-muted);
+  animation: none;
+}
+
+.btn-icon-sm {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon-sm:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+/* Camera Video Element */
+.camera-video-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #0a0a0a;
+}
+
+.camera-feed video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: transform 0.3s ease;
+}
+
+/* Camera Status Badges */
+.camera-status-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.camera-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.camera-badge.webrtc {
+  background: rgba(46, 204, 113, 0.2);
+  color: #2ecc71;
+}
+
+.camera-badge.local {
+  background: rgba(52, 152, 219, 0.2);
+  color: #3498db;
+}
+
+/* Camera Loader */
+.camera-loader {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #ffffff;
+  font-size: 0.85rem;
+}
+
+.loader-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Camera Error */
+.camera-error {
+  position: absolute;
+  inset: 0;
+  background: rgba(192, 57, 43, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #ffffff;
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 20px;
+}
+
+.error-icon {
+  width: 32px;
+  height: 32px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+/* No Signal Icon */
+.no-signal-icon {
+  margin-bottom: 8px;
+  opacity: 0.6;
+}
+
+.camera-no-signal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #555555;
+  font-size: 0.85rem;
+  text-align: center;
+  height: 100%;
+}
+
+/* Connection Type Selector */
+.connection-type-selector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.radio-card {
+  cursor: pointer;
+}
+
+.radio-card input {
+  display: none;
+}
+
+.radio-card-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  transition: all var(--transition);
+  text-align: center;
+}
+
+.radio-card-content span {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.radio-card-content small {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.radio-card input:checked + .radio-card-content {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.radio-card:hover .radio-card-content {
+  border-color: var(--border-hover);
+}
+
+/* Connection Type Badge in Camera View */
+.connection-type {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.connection-type.webrtc {
+  background: rgba(46, 204, 113, 0.15);
+  color: #27ae60;
+}
+
+.connection-type.local {
+  background: rgba(52, 152, 219, 0.15);
+  color: #2980b9;
+}
+
+.connection-type.http {
+  background: rgba(241, 196, 15, 0.15);
+  color: #f39c12;
+}
+
+/* WebRTC Info Banner */
+.webrtc-info-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 20px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.webrtc-info-banner svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+/* Camera Placeholder Full */
+.camera-placeholder-full {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #666666;
+  font-size: 1rem;
+  text-align: center;
+}
+
+.camera-placeholder-full svg {
+  opacity: 0.5;
+}
+
+.placeholder-hint {
+  font-size: 0.8rem;
+  color: #888888;
+}
+
+/* ===========================
    RESPONSIVE
    =========================== */
 @media (max-width: 768px) {
@@ -1050,6 +1343,13 @@ select {
   .camera-toolbar {
     width: 100%;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .webrtc-status-container {
+    order: -1;
+    width: 100%;
   }
 
   .devices-grid {
@@ -1073,5 +1373,20 @@ select {
   .cam-ctrl-btn {
     padding: 8px 10px;
     min-width: 60px;
+  }
+
+  .connection-type-selector {
+    grid-template-columns: 1fr;
+  }
+
+  .radio-card-content {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 12px;
+  }
+
+  .radio-card-content svg {
+    width: 20px;
+    height: 20px;
   }
 }
