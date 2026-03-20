@@ -29,8 +29,8 @@ const CONFIG = {
   // Configuración de cámaras RTSP
   cameras: [
     {
-      id: 'camera-1',
-      name: 'Entrada Principal',
+       id: 'bf4dfdea-8eda-43e2-926d-f147c008bd63',
+      name: 'Camara Entrada 2',
       rtspUrl: 'rtsp://admin:12345@192.168.1.64:554/stream1',
       // Ajusta según tu cámara:
       // Hikvision: rtsp://admin:password@IP:554/Streaming/Channels/101
