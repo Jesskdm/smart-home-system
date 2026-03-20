@@ -31,10 +31,11 @@ let cameraAudioActive = false;
 let supabaseReady = false;
 
 // ===========================
-// WEBRTC CONFIGURATION
+// STREAMING CONFIGURATION
 // ===========================
 const webrtcConnections = new Map();
 const localStreams = new Map();
+const streamingCanvases = new Map();
 
 const ICE_SERVERS = {
   iceServers: [
@@ -44,11 +45,15 @@ const ICE_SERVERS = {
   ],
 };
 
-// WebRTC Signaling Server URL (configurable)
+// Servidor de Streaming RTSP URL (configurable)
 let SIGNALING_SERVER_URL = "ws://localhost:8080";
 
-// WebSocket connection for signaling
-let signalingSocket = null;
+// WebSocket connection para streaming
+let streamingSocket = null;
+let streamingConnected = false;
+
+// Cache de frames para cada cámara
+const frameCache = new Map();
 
 // ===========================
 // SUPABASE HELPERS
@@ -347,13 +352,17 @@ function createCameraCard(cam) {
   card.setAttribute("data-camera-id", cam.id);
   card.onclick = () => openCameraView(cam.id);
 
-  const isWebRTC = cam.connection_type === "webrtc" || cam.use_local_camera;
+  const isStreaming = cam.connection_type === "webrtc" || cam.stream_url;
+  const isLocalCam = cam.use_local_camera;
 
   card.innerHTML = `
     <div class="camera-feed-preview">
-      ${isWebRTC ? `
+      ${isLocalCam ? `
         <video class="camera-video-preview" data-camera-id="${cam.id}" autoplay muted playsinline></video>
         <div class="camera-no-signal" style="display:none">Sin senal</div>
+      ` : isStreaming ? `
+        <img class="camera-stream-preview" data-camera-id="${cam.id}" alt="${cam.name}">
+        <div class="camera-no-signal" style="display:none">Conectando...</div>
       ` : cam.snapshot_url ? `
         <img src="${cam.snapshot_url}" alt="${cam.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
         <div class="camera-no-signal" style="display:none">Sin senal</div>
@@ -375,22 +384,23 @@ function createCameraCard(cam) {
           <div class="camera-card-location">${cam.location || ""} | ${cam.camera_brand || "---"} | ${cam.resolution || "---"}</div>
         </div>
         <div class="camera-status-badges">
-          ${cam.connection_type === "webrtc" ? '<span class="camera-badge webrtc">WebRTC</span>' : ''}
-          ${cam.use_local_camera ? '<span class="camera-badge local">Local</span>' : ''}
+          ${isStreaming ? '<span class="camera-badge webrtc">RTSP</span>' : ''}
+          ${isLocalCam ? '<span class="camera-badge local">Local</span>' : ''}
           <div class="camera-rec-dot ${cam.is_recording ? "" : "off"}"></div>
         </div>
       </div>
     </div>`;
 
-  // Iniciar conexion WebRTC si es necesario
-  if (isWebRTC) {
-    setTimeout(() => {
+  // Iniciar conexion segun tipo
+  setTimeout(() => {
+    if (isLocalCam) {
       const videoEl = card.querySelector("video");
-      if (videoEl) {
-        connectCamera(cam.id, videoEl);
-      }
-    }, 100);
-  }
+      if (videoEl) connectCamera(cam.id, videoEl);
+    } else if (isStreaming) {
+      const imgEl = card.querySelector("img.camera-stream-preview");
+      if (imgEl) connectCamera(cam.id, imgEl);
+    }
+  }, 100);
 
   return card;
 }
@@ -719,194 +729,179 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ===========================
-// WEBRTC FUNCTIONS
+// STREAMING FUNCTIONS (RTSP via WebSocket MJPEG)
 // ===========================
 
 /**
- * Inicializa la conexion WebSocket para senalizacion WebRTC
+ * Inicializa la conexion WebSocket para streaming RTSP
  */
 function initSignalingConnection() {
-  if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
+  if (streamingSocket && streamingSocket.readyState === WebSocket.OPEN) {
     return;
   }
 
-  signalingSocket = new WebSocket(SIGNALING_SERVER_URL);
+  console.log("[Streaming] Conectando a:", SIGNALING_SERVER_URL);
+  streamingSocket = new WebSocket(SIGNALING_SERVER_URL);
 
-  signalingSocket.onopen = () => {
-    console.log("[WebRTC] Conectado al servidor de senalizacion");
+  streamingSocket.onopen = () => {
+    console.log("[Streaming] Conectado al servidor RTSP");
+    streamingConnected = true;
     updateWebRTCStatus(true);
+    
+    // Re-suscribirse a camaras activas
+    streamingCanvases.forEach((canvas, cameraId) => {
+      subscribeToCamera(cameraId);
+    });
   };
 
-  signalingSocket.onclose = () => {
-    console.log("[WebRTC] Desconectado del servidor de senalizacion");
+  streamingSocket.onclose = () => {
+    console.log("[Streaming] Desconectado del servidor");
+    streamingConnected = false;
     updateWebRTCStatus(false);
     // Reconectar despues de 5 segundos
     setTimeout(initSignalingConnection, 5000);
   };
 
-  signalingSocket.onerror = (error) => {
-    console.error("[WebRTC] Error de conexion:", error);
+  streamingSocket.onerror = (error) => {
+    console.error("[Streaming] Error de conexion:", error);
+    streamingConnected = false;
     updateWebRTCStatus(false);
   };
 
-  signalingSocket.onmessage = async (event) => {
-    const message = JSON.parse(event.data);
-    await handleSignalingMessage(message);
+  streamingSocket.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data);
+      handleStreamingMessage(message);
+    } catch (error) {
+      console.error("[Streaming] Error parseando mensaje:", error);
+    }
   };
 }
 
 /**
- * Maneja mensajes de senalizacion entrantes
+ * Maneja mensajes del servidor de streaming
  */
-async function handleSignalingMessage(message) {
+function handleStreamingMessage(message) {
   const { type, cameraId, data: msgData } = message;
 
   switch (type) {
-    case "offer":
-      await handleOffer(cameraId, msgData);
+    case "frame":
+      // Recibir frame MJPEG y renderizar
+      renderFrame(cameraId, msgData);
       break;
-    case "answer":
-      await handleAnswer(cameraId, msgData);
+    case "cameras-list":
+      console.log("[Streaming] Camaras disponibles:", message.cameras);
       break;
-    case "ice-candidate":
-      await handleIceCandidate(cameraId, msgData);
+    case "subscribed":
+      console.log("[Streaming] Suscrito a camara:", cameraId);
+      updateCameraConnectionStatus(cameraId, "connected");
       break;
-    case "camera-stream-ready":
-      console.log("[WebRTC] Stream de camara listo:", cameraId);
+    case "error":
+      console.error("[Streaming] Error:", message.message);
+      showCameraError(cameraId, message.message);
+      break;
+    case "stream-ended":
+      console.log("[Streaming] Stream terminado:", cameraId);
+      updateCameraConnectionStatus(cameraId, "disconnected");
       break;
   }
 }
 
 /**
- * Inicia una conexion WebRTC para una camara
+ * Renderiza un frame JPEG en el canvas/img de la camara
  */
-async function startWebRTCConnection(cameraId, videoElement) {
-  // Limpiar conexion existente
-  stopWebRTCConnection(cameraId);
-
-  const peerConnection = new RTCPeerConnection(ICE_SERVERS);
-  webrtcConnections.set(cameraId, peerConnection);
-
-  // Configurar manejo de tracks entrantes
-  peerConnection.ontrack = (event) => {
-    console.log("[WebRTC] Track recibido para camara:", cameraId);
-    if (videoElement && event.streams[0]) {
-      videoElement.srcObject = event.streams[0];
-      videoElement.play().catch((e) => console.log("[WebRTC] Autoplay bloqueado:", e));
-    }
-  };
-
-  // Manejar candidatos ICE
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate && signalingSocket?.readyState === WebSocket.OPEN) {
-      signalingSocket.send(
-        JSON.stringify({
-          type: "ice-candidate",
-          cameraId: cameraId,
-          data: event.candidate,
-        })
-      );
-    }
-  };
-
-  // Monitorear estado de conexion
-  peerConnection.onconnectionstatechange = () => {
-    console.log("[WebRTC] Estado de conexion:", peerConnection.connectionState);
-    updateCameraConnectionStatus(cameraId, peerConnection.connectionState);
-  };
-
-  // Solicitar stream al servidor
-  if (signalingSocket?.readyState === WebSocket.OPEN) {
-    signalingSocket.send(
-      JSON.stringify({
-        type: "request-stream",
-        cameraId: cameraId,
-      })
-    );
-  }
-
-  return peerConnection;
+function renderFrame(cameraId, base64Data) {
+  // Actualizar cache
+  frameCache.set(cameraId, base64Data);
+  
+  // Buscar elementos para renderizar
+  const imgElements = document.querySelectorAll(`img[data-camera-stream="${cameraId}"]`);
+  const canvasElements = document.querySelectorAll(`canvas[data-camera-stream="${cameraId}"]`);
+  
+  const dataUrl = `data:image/jpeg;base64,${base64Data}`;
+  
+  // Renderizar en imagenes
+  imgElements.forEach(img => {
+    img.src = dataUrl;
+  });
+  
+  // Renderizar en canvas
+  canvasElements.forEach(canvas => {
+    const ctx = canvas.getContext("2d");
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = dataUrl;
+  });
 }
 
 /**
- * Maneja una oferta SDP recibida
+ * Suscribirse a una camara RTSP
  */
-async function handleOffer(cameraId, offer) {
-  const peerConnection = webrtcConnections.get(cameraId);
-  if (!peerConnection) return;
-
-  try {
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
-
-    if (signalingSocket?.readyState === WebSocket.OPEN) {
-      signalingSocket.send(
-        JSON.stringify({
-          type: "answer",
-          cameraId: cameraId,
-          data: answer,
-        })
-      );
-    }
-  } catch (error) {
-    console.error("[WebRTC] Error manejando oferta:", error);
+function subscribeToCamera(cameraId) {
+  if (streamingSocket?.readyState === WebSocket.OPEN) {
+    streamingSocket.send(JSON.stringify({
+      type: "subscribe",
+      cameraId: cameraId
+    }));
+    console.log("[Streaming] Solicitando stream de:", cameraId);
   }
 }
 
 /**
- * Maneja una respuesta SDP recibida
+ * Desuscribirse de una camara
  */
-async function handleAnswer(cameraId, answer) {
-  const peerConnection = webrtcConnections.get(cameraId);
-  if (!peerConnection) return;
+function unsubscribeFromCamera(cameraId) {
+  if (streamingSocket?.readyState === WebSocket.OPEN) {
+    streamingSocket.send(JSON.stringify({
+      type: "unsubscribe",
+      cameraId: cameraId
+    }));
+  }
+  streamingCanvases.delete(cameraId);
+}
 
-  try {
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-  } catch (error) {
-    console.error("[WebRTC] Error manejando respuesta:", error);
+/**
+ * Inicia streaming RTSP para una camara
+ */
+function startRTSPStreaming(cameraId, targetElement) {
+  // Guardar referencia al elemento
+  streamingCanvases.set(cameraId, targetElement);
+  
+  // Marcar elemento para recibir frames
+  targetElement.setAttribute("data-camera-stream", cameraId);
+  
+  // Suscribirse si ya estamos conectados
+  if (streamingConnected) {
+    subscribeToCamera(cameraId);
+  } else {
+    // Intentar conectar
+    initSignalingConnection();
   }
 }
 
 /**
- * Maneja un candidato ICE recibido
+ * Detiene streaming de una camara
  */
-async function handleIceCandidate(cameraId, candidate) {
-  const peerConnection = webrtcConnections.get(cameraId);
-  if (!peerConnection) return;
-
-  try {
-    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-  } catch (error) {
-    console.error("[WebRTC] Error agregando candidato ICE:", error);
-  }
+function stopRTSPStreaming(cameraId) {
+  unsubscribeFromCamera(cameraId);
+  
+  // Limpiar atributos de elementos
+  const elements = document.querySelectorAll(`[data-camera-stream="${cameraId}"]`);
+  elements.forEach(el => el.removeAttribute("data-camera-stream"));
 }
 
 /**
- * Detiene una conexion WebRTC
- */
-function stopWebRTCConnection(cameraId) {
-  const peerConnection = webrtcConnections.get(cameraId);
-  if (peerConnection) {
-    peerConnection.close();
-    webrtcConnections.delete(cameraId);
-  }
-
-  const localStream = localStreams.get(cameraId);
-  if (localStream) {
-    localStream.getTracks().forEach((track) => track.stop());
-    localStreams.delete(cameraId);
-  }
-}
-
-/**
- * Actualiza el estado de conexion WebRTC en la UI
+ * Actualiza el estado de conexion en la UI
  */
 function updateWebRTCStatus(connected) {
   const statusEl = document.getElementById("webrtc-status");
   if (statusEl) {
     statusEl.className = connected ? "webrtc-status connected" : "webrtc-status disconnected";
-    statusEl.textContent = connected ? "WebRTC Activo" : "WebRTC Desconectado";
+    statusEl.textContent = connected ? "Servidor Activo" : "Servidor Desconectado";
   }
 }
 
@@ -914,14 +909,14 @@ function updateWebRTCStatus(connected) {
  * Actualiza el estado de conexion de una camara
  */
 function updateCameraConnectionStatus(cameraId, state) {
-  const indicator = document.querySelector(`[data-camera-id="${cameraId}"] .connection-indicator`);
-  if (indicator) {
-    indicator.className = `connection-indicator ${state}`;
+  const card = document.querySelector(`[data-camera-id="${cameraId}"]`);
+  if (card) {
+    card.setAttribute("data-connection-state", state);
   }
 }
 
 /**
- * Intenta conectar usando getUserMedia como fallback (camara local/dispositivo)
+ * Intenta conectar usando getUserMedia (camara local/webcam)
  */
 async function tryLocalCameraFallback(cameraId, videoElement) {
   const cam = data.cameras.find((c) => c.id === cameraId);
@@ -942,10 +937,10 @@ async function tryLocalCameraFallback(cameraId, videoElement) {
       localStreams.set(cameraId, stream);
       videoElement.srcObject = stream;
       await videoElement.play();
-      console.log("[WebRTC] Camara local conectada:", cameraId);
+      console.log("[Streaming] Camara local conectada:", cameraId);
       return true;
     } catch (error) {
-      console.error("[WebRTC] Error accediendo camara local:", error);
+      console.error("[Streaming] Error accediendo camara local:", error);
       return false;
     }
   }
@@ -956,35 +951,37 @@ async function tryLocalCameraFallback(cameraId, videoElement) {
 /**
  * Conecta una camara usando el mejor metodo disponible
  */
-async function connectCamera(cameraId, videoElement) {
+async function connectCamera(cameraId, targetElement) {
   const cam = data.cameras.find((c) => c.id === cameraId);
   if (!cam) return;
 
   // Mostrar estado de carga
   showCameraLoading(cameraId, true);
 
-  // 1. Intentar con camara local primero
-  if (await tryLocalCameraFallback(cameraId, videoElement)) {
+  // 1. Intentar con camara local primero (webcam)
+  if (cam.use_local_camera && targetElement.tagName === "VIDEO") {
+    if (await tryLocalCameraFallback(cameraId, targetElement)) {
+      showCameraLoading(cameraId, false);
+      return;
+    }
+  }
+
+  // 2. Intentar streaming RTSP via WebSocket
+  if (cam.connection_type === "webrtc" || cam.stream_url) {
+    startRTSPStreaming(cameraId, targetElement);
     showCameraLoading(cameraId, false);
     return;
   }
 
-  // 2. Intentar conexion WebRTC
-  if (signalingSocket?.readyState === WebSocket.OPEN) {
-    await startWebRTCConnection(cameraId, videoElement);
-    showCameraLoading(cameraId, false);
-    return;
-  }
-
-  // 3. Fallback: Intentar imagen estatica si hay snapshot_url
+  // 3. Fallback: Imagen estatica
   if (cam.snapshot_url) {
     showCameraSnapshot(cameraId, cam.snapshot_url);
     showCameraLoading(cameraId, false);
     return;
   }
 
-  // 4. Mostrar error de conexion
-  showCameraError(cameraId, "No se pudo conectar a la camara");
+  // 4. Mostrar mensaje de configuracion
+  showCameraError(cameraId, "Configura el servidor de streaming");
   showCameraLoading(cameraId, false);
 }
 

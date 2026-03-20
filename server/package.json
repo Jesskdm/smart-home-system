@@ -1,14 +1,18 @@
 {
-  "name": "webrtc-signaling-server",
+  "name": "rtsp-stream-server",
   "version": "1.0.0",
-  "description": "Servidor de señalización WebRTC para cámaras de seguridad",
+  "description": "Servidor de streaming RTSP a WebSocket para cámaras de seguridad",
   "type": "module",
-  "main": "signaling-server.js",
+  "main": "rtsp-stream-server.js",
   "scripts": {
-    "start": "node signaling-server.js",
-    "dev": "node --watch signaling-server.js"
+    "start": "node rtsp-stream-server.js",
+    "dev": "node --watch rtsp-stream-server.js",
+    "signaling": "node signaling-server.js"
   },
   "dependencies": {
     "ws": "^8.16.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
