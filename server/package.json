@@ -1,0 +1,14 @@
+{
+  "name": "webrtc-signaling-server",
+  "version": "1.0.0",
+  "description": "Servidor de señalización WebRTC para cámaras de seguridad",
+  "type": "module",
+  "main": "signaling-server.js",
+  "scripts": {
+    "start": "node signaling-server.js",
+    "dev": "node --watch signaling-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}
