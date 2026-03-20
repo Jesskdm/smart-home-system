@@ -783,6 +783,7 @@ function initSignalingConnection() {
  */
 function handleStreamingMessage(message) {
   const { type, cameraId, data: msgData } = message;
+  console.log("[v0] Mensaje recibido:", type, "para camara:", cameraId);
 
   switch (type) {
     case "frame":
@@ -790,18 +791,20 @@ function handleStreamingMessage(message) {
       renderFrame(cameraId, msgData);
       break;
     case "cameras-list":
-      console.log("[Streaming] Camaras disponibles:", message.cameras);
+      console.log("[v0] Camaras disponibles en servidor:", message.cameras);
+      // Guardar lista de camaras del servidor para mapeo
+      window.serverCameras = message.cameras;
       break;
     case "subscribed":
-      console.log("[Streaming] Suscrito a camara:", cameraId);
+      console.log("[v0] Suscrito exitosamente a camara:", cameraId);
       updateCameraConnectionStatus(cameraId, "connected");
       break;
     case "error":
-      console.error("[Streaming] Error:", message.message);
+      console.error("[v0] Error del servidor:", message.message, "camara:", cameraId);
       showCameraError(cameraId, message.message);
       break;
     case "stream-ended":
-      console.log("[Streaming] Stream terminado:", cameraId);
+      console.log("[v0] Stream terminado:", cameraId);
       updateCameraConnectionStatus(cameraId, "disconnected");
       break;
   }
@@ -810,13 +813,25 @@ function handleStreamingMessage(message) {
 /**
  * Renderiza un frame JPEG en el canvas/img de la camara
  */
+let frameCount = 0;
 function renderFrame(cameraId, base64Data) {
+  frameCount++;
+  if (frameCount % 30 === 0) {
+    console.log("[v0] Frames recibidos:", frameCount, "para:", cameraId);
+  }
+  
   // Actualizar cache
   frameCache.set(cameraId, base64Data);
   
   // Buscar elementos para renderizar
   const imgElements = document.querySelectorAll(`img[data-camera-stream="${cameraId}"]`);
   const canvasElements = document.querySelectorAll(`canvas[data-camera-stream="${cameraId}"]`);
+  
+  if (frameCount === 1) {
+    console.log("[v0] Elementos img encontrados:", imgElements.length);
+    console.log("[v0] Elementos canvas encontrados:", canvasElements.length);
+    console.log("[v0] Buscando selector:", `[data-camera-stream="${cameraId}"]`);
+  }
   
   const dataUrl = `data:image/jpeg;base64,${base64Data}`;
   
@@ -829,6 +844,7 @@ function renderFrame(cameraId, base64Data) {
   canvasElements.forEach(canvas => {
     const ctx = canvas.getContext("2d");
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.onload = () => {
       canvas.width = img.width;
       canvas.height = img.height;
@@ -842,12 +858,30 @@ function renderFrame(cameraId, base64Data) {
  * Suscribirse a una camara RTSP
  */
 function subscribeToCamera(cameraId) {
+  console.log("[v0] subscribeToCamera llamado con:", cameraId);
+  console.log("[v0] WebSocket estado:", streamingSocket?.readyState, "OPEN=", WebSocket.OPEN);
+  
+  // Buscar datos de la cámara
+  const cam = data.cameras.find(c => c.id === cameraId || c.id === parseInt(cameraId));
+  console.log("[v0] Datos de camara encontrados:", cam);
+  
   if (streamingSocket?.readyState === WebSocket.OPEN) {
-    streamingSocket.send(JSON.stringify({
+    const msg = {
       type: "subscribe",
-      cameraId: cameraId
-    }));
-    console.log("[Streaming] Solicitando stream de:", cameraId);
+      cameraId: String(cameraId),
+      // Enviar URL RTSP para registro dinámico
+      rtspUrl: cam?.stream_url || null,
+      options: {
+        name: cam?.name || "Camera",
+        width: cam?.resolution === "4K" ? 3840 : cam?.resolution === "2K" ? 2560 : cam?.resolution === "1080p" ? 1920 : 1280,
+        height: cam?.resolution === "4K" ? 2160 : cam?.resolution === "2K" ? 1440 : cam?.resolution === "1080p" ? 1080 : 720,
+        fps: 15
+      }
+    };
+    console.log("[v0] Enviando mensaje:", JSON.stringify(msg));
+    streamingSocket.send(JSON.stringify(msg));
+  } else {
+    console.log("[v0] WebSocket no conectado, no se puede suscribir");
   }
 }
 
@@ -868,18 +902,34 @@ function unsubscribeFromCamera(cameraId) {
  * Inicia streaming RTSP para una camara
  */
 function startRTSPStreaming(cameraId, targetElement) {
+  const camIdStr = String(cameraId);
+  console.log("[v0] startRTSPStreaming llamado");
+  console.log("[v0] cameraId:", camIdStr);
+  console.log("[v0] targetElement:", targetElement?.tagName, targetElement?.className);
+  
   // Guardar referencia al elemento
-  streamingCanvases.set(cameraId, targetElement);
+  streamingCanvases.set(camIdStr, targetElement);
   
   // Marcar elemento para recibir frames
-  targetElement.setAttribute("data-camera-stream", cameraId);
+  targetElement.setAttribute("data-camera-stream", camIdStr);
+  console.log("[v0] Atributo data-camera-stream establecido:", targetElement.getAttribute("data-camera-stream"));
   
   // Suscribirse si ya estamos conectados
   if (streamingConnected) {
-    subscribeToCamera(cameraId);
+    console.log("[v0] Ya conectado, suscribiendo...");
+    subscribeToCamera(camIdStr);
   } else {
-    // Intentar conectar
+    console.log("[v0] No conectado, iniciando conexion...");
     initSignalingConnection();
+    // Esperar a que conecte y luego suscribir
+    const checkConnection = setInterval(() => {
+      if (streamingConnected) {
+        clearInterval(checkConnection);
+        subscribeToCamera(camIdStr);
+      }
+    }, 500);
+    // Timeout después de 10 segundos
+    setTimeout(() => clearInterval(checkConnection), 10000);
   }
 }
 
