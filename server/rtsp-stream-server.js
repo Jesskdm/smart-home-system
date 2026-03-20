@@ -31,7 +31,7 @@ const CONFIG = {
     {
       id: 'camera-1',
       name: 'Entrada Principal',
-      rtspUrl: 'rtsp://hview:12345@192.168.1.13:554/stream1',
+      rtspUrl: 'rtsp://admin:12345@192.168.1.64:554/stream1',
       // Ajusta según tu cámara:
       // Hikvision: rtsp://admin:password@IP:554/Streaming/Channels/101
       // Dahua: rtsp://admin:password@IP:554/cam/realmonitor?channel=1&subtype=0
@@ -153,8 +153,14 @@ class RTSPStreamServer {
   }
 
   handleMessage(ws, data) {
+    console.log('[Server] Mensaje recibido:', data.type, 'cameraId:', data.cameraId);
+    
     switch (data.type) {
       case 'subscribe':
+        // Si viene con rtspUrl, registrar cámara dinámica
+        if (data.rtspUrl) {
+          this.registerDynamicCamera(data.cameraId, data.rtspUrl, data.options || {});
+        }
         this.subscribeToCamera(ws, data.cameraId);
         break;
       case 'unsubscribe':
@@ -166,7 +172,36 @@ class RTSPStreamServer {
           cameras: CONFIG.cameras.map(c => ({ id: c.id, name: c.name }))
         }));
         break;
+      case 'register-camera':
+        // Registrar cámara sin suscribirse
+        this.registerDynamicCamera(data.cameraId, data.rtspUrl, data.options || {});
+        ws.send(JSON.stringify({ type: 'camera-registered', cameraId: data.cameraId }));
+        break;
     }
+  }
+  
+  registerDynamicCamera(cameraId, rtspUrl, options = {}) {
+    // Verificar si ya existe
+    const existing = CONFIG.cameras.find(c => c.id === cameraId);
+    if (existing) {
+      // Actualizar URL si cambió
+      existing.rtspUrl = rtspUrl;
+      console.log(`[${cameraId}] URL actualizada`);
+      return;
+    }
+    
+    // Agregar nueva cámara
+    const newCamera = {
+      id: cameraId,
+      name: options.name || `Camera ${cameraId}`,
+      rtspUrl: rtspUrl,
+      width: options.width || 1280,
+      height: options.height || 720,
+      fps: options.fps || 15
+    };
+    
+    CONFIG.cameras.push(newCamera);
+    console.log(`[${cameraId}] Cámara registrada dinámicamente: ${rtspUrl.replace(/:[^:@]+@/, ':****@')}`);
   }
 
   subscribeToCamera(ws, cameraId) {
@@ -308,7 +343,7 @@ class RTSPStreamServer {
 
   broadcastFrame(cameraId, frame) {
     const viewers = this.viewers.get(cameraId);
-    if (!viewers) return;
+    if (!viewers || viewers.size === 0) return;
 
     const base64Frame = frame.toString('base64');
     const message = JSON.stringify({
@@ -316,6 +351,13 @@ class RTSPStreamServer {
       cameraId,
       data: base64Frame
     });
+
+    // Log cada 30 frames
+    if (!this.frameCounters) this.frameCounters = {};
+    this.frameCounters[cameraId] = (this.frameCounters[cameraId] || 0) + 1;
+    if (this.frameCounters[cameraId] % 30 === 0) {
+      console.log(`[${cameraId}] Frames enviados: ${this.frameCounters[cameraId]}, tamaño: ${Math.round(base64Frame.length/1024)}KB, visores: ${viewers.size}`);
+    }
 
     viewers.forEach(ws => {
       if (ws.readyState === WebSocket.OPEN) {
