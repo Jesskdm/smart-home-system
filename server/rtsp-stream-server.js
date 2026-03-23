@@ -17,8 +17,25 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { spawn } from 'child_process';
 import http from 'http';
+import https from 'https';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+
+// Obtener IP local para acceso en red
+function getLocalIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+}
+
+const LOCAL_IP = getLocalIP();
 
 // ===========================
 // CONFIGURACIÓN
