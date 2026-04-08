@@ -1,3 +1,8 @@
+/**
+ * Smart Home - Control de Dispositivos
+ * Tablas separadas: lights, locks, thermostats, motion_sensors, cameras
+ */
+
 const SUPABASE_URL = "https://vufsssdphryumshvvlcv.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1ZnNzc2RwaHJ5dW1zaHZ2bGN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1NTk4MzksImV4cCI6MjA4MDEzNTgzOX0.6SC5FULLxaOX_hei23VeVMp6zjJYU8I2LUakJ71H9mM";
 
@@ -1141,3 +1146,503 @@ document.addEventListener("DOMContentLoaded", () => {
   // Intentar conectar al servidor de senalizacion
   initSignalingConnection();
 });
+
+// ===========================
+// DVR QR SCANNER
+// ===========================
+let html5QrCode = null;
+let currentDVRConfig = null;
+let selectedDVRCameras = new Set();
+
+// Plantillas RTSP por marca de DVR
+const DVR_RTSP_TEMPLATES = {
+  hikvision: "rtsp://{user}:{pass}@{ip}:{port}/Streaming/Channels/{ch}01",
+  dahua: "rtsp://{user}:{pass}@{ip}:{port}/cam/realmonitor?channel={ch}&subtype=0",
+  hview: "rtsp://{user}:{pass}@{ip}:{port}/stream{ch}",
+  xmeye: "rtsp://{user}:{pass}@{ip}:{port}/user={user}&password={pass}&channel={ch}&stream=0.sdp",
+  other: "rtsp://{user}:{pass}@{ip}:{port}/ch{ch}/main/av_stream"
+};
+
+/**
+ * Abre el modal de escaneo de DVR
+ */
+function openDVRScanModal() {
+  document.getElementById("dvr-scan-modal").classList.remove("hidden");
+  switchDVRTab("scan");
+}
+
+/**
+ * Cierra el modal de escaneo
+ */
+function closeDVRScanModal() {
+  document.getElementById("dvr-scan-modal").classList.add("hidden");
+  stopQRScanner();
+}
+
+/**
+ * Cambia entre tabs del modal DVR
+ */
+function switchDVRTab(tabName) {
+  // Actualizar botones
+  document.querySelectorAll(".dvr-tab").forEach(tab => {
+    tab.classList.toggle("active", tab.dataset.tab === tabName);
+  });
+  
+  // Actualizar contenido
+  document.querySelectorAll(".dvr-tab-content").forEach(content => {
+    content.classList.toggle("active", content.id === `dvr-tab-${tabName}`);
+  });
+  
+  // Detener scanner si cambiamos de tab
+  if (tabName !== "scan") {
+    stopQRScanner();
+  }
+}
+
+/**
+ * Inicia el escaner de codigo QR
+ */
+async function startQRScanner() {
+  const placeholder = document.getElementById("qr-reader-placeholder");
+  if (placeholder) placeholder.classList.add("hidden");
+  
+  try {
+    html5QrCode = new Html5Qrcode("qr-reader");
+    
+    await html5QrCode.start(
+      { facingMode: "environment" },
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1
+      },
+      onQRCodeScanned,
+      (errorMessage) => {
+        // Ignorar errores de escaneo continuos
+      }
+    );
+  } catch (error) {
+    console.error("Error iniciando escaner QR:", error);
+    alert("No se pudo acceder a la camara. Verifica los permisos.");
+    if (placeholder) placeholder.classList.remove("hidden");
+  }
+}
+
+/**
+ * Detiene el escaner QR
+ */
+async function stopQRScanner() {
+  if (html5QrCode) {
+    try {
+      await html5QrCode.stop();
+      html5QrCode = null;
+    } catch (error) {
+      console.error("Error deteniendo escaner:", error);
+    }
+  }
+  
+  const placeholder = document.getElementById("qr-reader-placeholder");
+  if (placeholder) placeholder.classList.remove("hidden");
+  
+  // Limpiar el contenedor
+  const reader = document.getElementById("qr-reader");
+  if (reader) reader.innerHTML = "";
+}
+
+/**
+ * Callback cuando se escanea un codigo QR
+ */
+function onQRCodeScanned(decodedText) {
+  console.log("QR Escaneado:", decodedText);
+  stopQRScanner();
+  
+  // Parsear el codigo QR
+  const dvrConfig = parseQRCode(decodedText);
+  
+  if (dvrConfig) {
+    currentDVRConfig = dvrConfig;
+    showDVRCameras(dvrConfig);
+  } else {
+    alert("Codigo QR no reconocido. Intenta con configuracion manual.");
+    switchDVRTab("manual");
+  }
+}
+
+/**
+ * Parsea diferentes formatos de codigo QR de DVR
+ */
+function parseQRCode(qrText) {
+  // Intentar diferentes formatos
+  
+  // Formato Hikvision: HIKVISION://IP:PORT/DEVICEID
+  if (qrText.startsWith("HIKVISION://") || qrText.includes("hik")) {
+    return parseHikvisionQR(qrText);
+  }
+  
+  // Formato Dahua/DMSS: json o URL
+  if (qrText.startsWith("{") || qrText.includes("dahua")) {
+    return parseDahuaQR(qrText);
+  }
+  
+  // Formato XMEye/Generic: URL con parametros
+  if (qrText.includes("xmeye") || qrText.includes("xm.")) {
+    return parseXMEyeQR(qrText);
+  }
+  
+  // URL RTSP directa
+  if (qrText.startsWith("rtsp://")) {
+    return parseRTSPUrl(qrText);
+  }
+  
+  // Intentar parsear como JSON
+  try {
+    const json = JSON.parse(qrText);
+    return {
+      brand: json.brand || json.type || "other",
+      name: json.name || json.deviceName || "DVR",
+      ip: json.ip || json.host || json.address,
+      port: json.port || 554,
+      username: json.user || json.username || "admin",
+      password: json.pass || json.password || "",
+      channels: json.channels || json.ch || 8,
+      deviceId: json.deviceId || json.sn || null
+    };
+  } catch (e) {
+    // No es JSON
+  }
+  
+  // Intentar extraer IP de cualquier texto
+  const ipMatch = qrText.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+  if (ipMatch) {
+    return {
+      brand: "other",
+      name: "DVR",
+      ip: ipMatch[1],
+      port: 554,
+      username: "admin",
+      password: "",
+      channels: 8
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * Parsea QR de Hikvision
+ */
+function parseHikvisionQR(qrText) {
+  // HIKVISION://192.168.1.64:8000/DS-7208HQHI-K1
+  const match = qrText.match(/HIKVISION:\/\/([^:]+):?(\d+)?\/?(.*)?/i) ||
+                qrText.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):?(\d+)?/);
+  
+  if (match) {
+    return {
+      brand: "hikvision",
+      name: match[3] || "Hikvision DVR",
+      ip: match[1],
+      port: parseInt(match[2]) || 554,
+      username: "admin",
+      password: "",
+      channels: 8,
+      deviceId: match[3] || null
+    };
+  }
+  return null;
+}
+
+/**
+ * Parsea QR de Dahua
+ */
+function parseDahuaQR(qrText) {
+  try {
+    const json = JSON.parse(qrText);
+    return {
+      brand: "dahua",
+      name: json.Name || "Dahua DVR",
+      ip: json.IP || json.Host,
+      port: json.Port || 554,
+      username: json.User || "admin",
+      password: json.Password || "",
+      channels: json.Channels || 8,
+      deviceId: json.SN || null
+    };
+  } catch (e) {
+    const ipMatch = qrText.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+    if (ipMatch) {
+      return {
+        brand: "dahua",
+        name: "Dahua DVR",
+        ip: ipMatch[1],
+        port: 554,
+        username: "admin",
+        password: "",
+        channels: 8
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Parsea QR de XMEye
+ */
+function parseXMEyeQR(qrText) {
+  const ipMatch = qrText.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+  const portMatch = qrText.match(/:(\d{3,5})/);
+  
+  return {
+    brand: "xmeye",
+    name: "XMEye DVR",
+    ip: ipMatch ? ipMatch[1] : "",
+    port: portMatch ? parseInt(portMatch[1]) : 554,
+    username: "admin",
+    password: "",
+    channels: 8
+  };
+}
+
+/**
+ * Parsea URL RTSP directa
+ */
+function parseRTSPUrl(url) {
+  // rtsp://user:pass@192.168.1.64:554/stream
+  const match = url.match(/rtsp:\/\/(?:([^:]+):([^@]+)@)?([^:\/]+):?(\d+)?\/(.*)/);
+  
+  if (match) {
+    return {
+      brand: "other",
+      name: "DVR",
+      ip: match[3],
+      port: parseInt(match[4]) || 554,
+      username: match[1] || "admin",
+      password: match[2] || "",
+      channels: 1,
+      directUrl: url
+    };
+  }
+  return null;
+}
+
+/**
+ * Actualiza valores por defecto segun la marca
+ */
+function updateDVRDefaults() {
+  const brand = document.getElementById("dvr-brand").value;
+  const template = DVR_RTSP_TEMPLATES[brand] || DVR_RTSP_TEMPLATES.other;
+  document.getElementById("dvr-rtsp-template").value = template;
+}
+
+/**
+ * Maneja configuracion manual del DVR
+ */
+async function handleDVRManualConfig(event) {
+  event.preventDefault();
+  
+  const config = {
+    brand: document.getElementById("dvr-brand").value,
+    name: document.getElementById("dvr-name").value.trim(),
+    ip: document.getElementById("dvr-ip").value.trim(),
+    port: parseInt(document.getElementById("dvr-port").value) || 554,
+    username: document.getElementById("dvr-username").value.trim(),
+    password: document.getElementById("dvr-password").value,
+    channels: parseInt(document.getElementById("dvr-channels").value) || 8,
+    rtspTemplate: document.getElementById("dvr-rtsp-template").value.trim() || DVR_RTSP_TEMPLATES[document.getElementById("dvr-brand").value]
+  };
+  
+  if (!config.ip) {
+    alert("Ingresa la direccion IP del DVR");
+    return;
+  }
+  
+  currentDVRConfig = config;
+  showDVRCameras(config);
+}
+
+/**
+ * Prueba la conexion al DVR
+ */
+async function testDVRConnection() {
+  const ip = document.getElementById("dvr-ip").value.trim();
+  const port = document.getElementById("dvr-port").value || 554;
+  
+  if (!ip) {
+    alert("Ingresa la direccion IP del DVR");
+    return;
+  }
+  
+  // Intentar ping via servidor de streaming
+  if (streamingSocket?.readyState === WebSocket.OPEN) {
+    streamingSocket.send(JSON.stringify({
+      type: "test-connection",
+      ip: ip,
+      port: port
+    }));
+    alert("Solicitud de prueba enviada. Verifica la consola del servidor.");
+  } else {
+    alert("Conecta primero al servidor de streaming para probar la conexion.");
+  }
+}
+
+/**
+ * Muestra el modal con las camaras del DVR
+ */
+function showDVRCameras(config) {
+  closeDVRScanModal();
+  
+  // Actualizar info del DVR
+  document.getElementById("dvr-cameras-title").textContent = `Camaras de ${config.name}`;
+  document.getElementById("dvr-info-name").textContent = config.name;
+  document.getElementById("dvr-info-ip").textContent = config.ip + ":" + config.port;
+  
+  // Generar grid de camaras
+  const grid = document.getElementById("dvr-cameras-grid");
+  grid.innerHTML = "";
+  selectedDVRCameras.clear();
+  
+  for (let i = 1; i <= config.channels; i++) {
+    const item = document.createElement("div");
+    item.className = "dvr-camera-item";
+    item.dataset.channel = i;
+    item.onclick = () => toggleDVRCameraSelection(item, i);
+    
+    item.innerHTML = `
+      <div class="dvr-camera-checkbox">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="dvr-camera-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+          <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.934a.5.5 0 0 0-.777-.416L16 11"/>
+          <rect x="2" y="7" width="14" height="10" rx="2"/>
+        </svg>
+      </div>
+      <div class="dvr-camera-name">Canal ${i}</div>
+      <div class="dvr-camera-channel">CH${i.toString().padStart(2, "0")}</div>
+      <span class="dvr-camera-status online">Disponible</span>
+    `;
+    
+    grid.appendChild(item);
+  }
+  
+  document.getElementById("dvr-cameras-modal").classList.remove("hidden");
+}
+
+/**
+ * Toggle seleccion de camara DVR
+ */
+function toggleDVRCameraSelection(item, channel) {
+  item.classList.toggle("selected");
+  
+  if (item.classList.contains("selected")) {
+    selectedDVRCameras.add(channel);
+  } else {
+    selectedDVRCameras.delete(channel);
+  }
+}
+
+/**
+ * Selecciona todas las camaras
+ */
+function selectAllDVRCameras() {
+  const items = document.querySelectorAll(".dvr-camera-item");
+  const allSelected = selectedDVRCameras.size === items.length;
+  
+  items.forEach(item => {
+    const channel = parseInt(item.dataset.channel);
+    if (allSelected) {
+      item.classList.remove("selected");
+      selectedDVRCameras.delete(channel);
+    } else {
+      item.classList.add("selected");
+      selectedDVRCameras.add(channel);
+    }
+  });
+}
+
+/**
+ * Cierra el modal de camaras DVR
+ */
+function closeDVRCamerasModal() {
+  document.getElementById("dvr-cameras-modal").classList.add("hidden");
+  currentDVRConfig = null;
+  selectedDVRCameras.clear();
+}
+
+/**
+ * Genera URL RTSP para un canal
+ */
+function generateRTSPUrl(config, channel) {
+  if (config.directUrl) {
+    return config.directUrl;
+  }
+  
+  const template = config.rtspTemplate || DVR_RTSP_TEMPLATES[config.brand] || DVR_RTSP_TEMPLATES.other;
+  
+  return template
+    .replace(/{user}/g, config.username)
+    .replace(/{pass}/g, config.password)
+    .replace(/{ip}/g, config.ip)
+    .replace(/{port}/g, config.port)
+    .replace(/{ch}/g, channel);
+}
+
+/**
+ * Agrega las camaras seleccionadas del DVR
+ */
+async function addSelectedDVRCameras() {
+  if (selectedDVRCameras.size === 0) {
+    alert("Selecciona al menos una camara");
+    return;
+  }
+  
+  const config = currentDVRConfig;
+  const camerasToAdd = [];
+  
+  for (const channel of selectedDVRCameras) {
+    const rtspUrl = generateRTSPUrl(config, channel);
+    
+    const camera = {
+      name: `${config.name} - Canal ${channel}`,
+      location: config.name,
+      stream_url: rtspUrl,
+      snapshot_url: null,
+      camera_username: config.username,
+      camera_password: config.password,
+      camera_brand: config.brand.charAt(0).toUpperCase() + config.brand.slice(1),
+      resolution: "1080p",
+      has_audio: true,
+      has_mic: false,
+      has_night_vision: true,
+      is_recording: false,
+      connection_type: "webrtc",
+      use_local_camera: false,
+      dvr_ip: config.ip,
+      dvr_channel: channel
+    };
+    
+    camerasToAdd.push(camera);
+  }
+  
+  // Agregar camaras a Supabase
+  let addedCount = 0;
+  for (const cam of camerasToAdd) {
+    try {
+      await sbInsert("cameras", cam);
+      addedCount++;
+    } catch (error) {
+      console.error("Error agregando camara:", error);
+      // Agregar localmente si falla
+      cam.id = "local-" + Date.now() + "-" + cam.dvr_channel;
+      cam.is_online = true;
+      data.cameras.push(cam);
+      addedCount++;
+    }
+  }
+  
+  closeDVRCamerasModal();
+  await loadAllData();
+  
+  alert(`Se agregaron ${addedCount} camaras del DVR`);
+}
