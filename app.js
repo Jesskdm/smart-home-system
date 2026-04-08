@@ -133,8 +133,41 @@ async function loadAllData() {
     }
     updateBadge(false);
   }
+  
+  // Cargar cámaras guardadas localmente y combinarlas
+  const localCameras = getLocalCameras();
+  if (localCameras.length > 0) {
+    // Filtrar duplicados por ID
+    const existingIds = new Set(data.cameras.map(c => c.id));
+    const newLocalCameras = localCameras.filter(c => !existingIds.has(c.id));
+    data.cameras = [...data.cameras, ...newLocalCameras];
+  }
+  
   renderCurrentSection();
   updateSidebarCounts();
+}
+
+// ===========================
+// LOCAL STORAGE PERSISTENCE
+// ===========================
+function getLocalCameras() {
+  try {
+    const stored = localStorage.getItem("local-cameras");
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveLocalCamera(camera) {
+  const cameras = getLocalCameras();
+  cameras.push(camera);
+  localStorage.setItem("local-cameras", JSON.stringify(cameras));
+}
+
+function removeLocalCamera(cameraId) {
+  const cameras = getLocalCameras().filter(c => c.id !== cameraId);
+  localStorage.setItem("local-cameras", JSON.stringify(cameras));
 }
 
 function getDefaults() {
@@ -154,11 +187,32 @@ function getDefaults() {
       { id: "d6", name: "Sensor Entrada", location: "Entrada", is_online: true, is_active: true, motion_detected: false, sensitivity: "high" },
       { id: "d7", name: "Sensor Patio", location: "Patio", is_online: true, is_active: true, motion_detected: false, sensitivity: "medium" },
     ],
-    cameras: [
-      { id: "d8", name: "Camara Entrada", location: "Entrada", is_online: true, is_recording: false, camera_brand: "H-VIEW", resolution: "1080p", has_audio: true, has_mic: true },
-      { id: "d9", name: "Camara Garage", location: "Garage", is_online: true, is_recording: false, camera_brand: "H-VIEW", resolution: "1080p", has_audio: true, has_mic: false },
-    ],
+    cameras: [],
   };
+}
+
+/**
+ * Elimina una cámara (local o de Supabase)
+ */
+async function deleteCamera(cameraId) {
+  if (!confirm("¿Eliminar esta cámara?")) return;
+  
+  // Si es cámara local
+  if (String(cameraId).startsWith("local-")) {
+    removeLocalCamera(cameraId);
+    data.cameras = data.cameras.filter(c => c.id !== cameraId);
+  } else {
+    // Intentar eliminar de Supabase
+    try {
+      await sbDelete("cameras", cameraId);
+    } catch (error) {
+      console.error("Error eliminando cámara:", error);
+    }
+    data.cameras = data.cameras.filter(c => c.id !== cameraId);
+  }
+  
+  renderCurrentSection();
+  updateSidebarCounts();
 }
 
 function updateBadge(connected) {
@@ -357,6 +411,12 @@ function createCameraCard(cam) {
 
   card.innerHTML = `
     <div class="camera-feed-preview">
+      <button class="camera-delete-btn" onclick="event.stopPropagation(); deleteCamera('${cam.id}')" title="Eliminar cámara">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
       ${isLocalCam ? `
         <video class="camera-video-preview" data-camera-id="${cam.id}" autoplay muted playsinline></video>
         <div class="camera-no-signal" style="display:none">Sin senal</div>
@@ -1598,7 +1658,7 @@ async function addSelectedDVRCameras() {
   }
   
   const config = currentDVRConfig;
-  const camerasToAdd = [];
+  let addedCount = 0;
   
   for (const channel of selectedDVRCameras) {
     const rtspUrl = generateRTSPUrl(config, channel);
@@ -1622,27 +1682,28 @@ async function addSelectedDVRCameras() {
       dvr_channel: channel
     };
     
-    camerasToAdd.push(camera);
-  }
-  
-  // Agregar camaras a Supabase
-  let addedCount = 0;
-  for (const cam of camerasToAdd) {
+    // Intentar guardar en Supabase primero
     try {
-      await sbInsert("cameras", cam);
+      await sbInsert("cameras", camera);
       addedCount++;
     } catch (error) {
-      console.error("Error agregando camara:", error);
-      // Agregar localmente si falla
-      cam.id = "local-" + Date.now() + "-" + cam.dvr_channel;
-      cam.is_online = true;
-      data.cameras.push(cam);
+      // Si Supabase falla, guardar localmente
+      camera.id = "local-dvr-" + Date.now() + "-ch" + channel;
+      camera.is_online = true;
+      camera.created_at = new Date().toISOString();
+      
+      // Guardar en localStorage para persistencia
+      saveLocalCamera(camera);
+      
+      // Agregar al array actual para mostrar inmediatamente
+      data.cameras.push(camera);
       addedCount++;
     }
   }
   
   closeDVRCamerasModal();
-  await loadAllData();
+  renderCurrentSection();
+  updateSidebarCounts();
   
   alert(`Se agregaron ${addedCount} camaras del DVR`);
 }
