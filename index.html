@@ -97,8 +97,8 @@
                     </div>
                     <div class="camera-toolbar">
                         <div class="webrtc-status-container">
-                            <span id="webrtc-status" class="webrtc-status disconnected">WebRTC Desconectado</span>
-                            <button class="btn btn-icon-sm" onclick="openWebRTCSettings()" title="Configurar WebRTC">
+                            <span id="webrtc-status" class="webrtc-status disconnected">Servidor Desconectado</span>
+                            <button class="btn btn-icon-sm" onclick="openWebRTCSettings()" title="Configurar Servidor">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                     <circle cx="12" cy="12" r="3"/>
                                     <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
@@ -110,6 +110,15 @@
                             <button class="grid-btn" data-grid="2" onclick="setCameraGrid(2)" title="2x2">2x2</button>
                             <button class="grid-btn" data-grid="3" onclick="setCameraGrid(3)" title="3x3">3x3</button>
                         </div>
+                        <button class="btn btn-secondary" onclick="openDVRScanModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <rect x="3" y="3" width="7" height="7"/>
+                                <rect x="14" y="3" width="7" height="7"/>
+                                <rect x="3" y="14" width="7" height="7"/>
+                                <rect x="14" y="14" width="7" height="7"/>
+                            </svg>
+                            Conectar DVR
+                        </button>
                         <button class="btn btn-primary" onclick="openCameraSetupModal()">+ Agregar Camara</button>
                     </div>
                 </div>
@@ -354,6 +363,164 @@
         </div>
     </div>
 
+    <!-- Modal: Escanear QR de DVR -->
+    <div id="dvr-scan-modal" class="modal hidden">
+        <div class="modal-overlay" onclick="closeDVRScanModal()"></div>
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2>Conectar DVR</h2>
+                <button class="modal-close" onclick="closeDVRScanModal()">&#x2715;</button>
+            </div>
+            
+            <div class="dvr-connection-tabs">
+                <button class="dvr-tab active" onclick="switchDVRTab('scan')" data-tab="scan">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <rect x="3" y="3" width="7" height="7"/>
+                        <rect x="14" y="3" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/>
+                        <path d="M14 14h7v7"/>
+                    </svg>
+                    Escanear QR
+                </button>
+                <button class="dvr-tab" onclick="switchDVRTab('manual')" data-tab="manual">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                    Configuracion Manual
+                </button>
+            </div>
+
+            <!-- Tab: Escanear QR -->
+            <div class="dvr-tab-content active" id="dvr-tab-scan">
+                <div class="qr-scanner-container">
+                    <div id="qr-reader" class="qr-reader"></div>
+                    <div id="qr-reader-placeholder" class="qr-reader-placeholder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64">
+                            <rect x="3" y="3" width="7" height="7"/>
+                            <rect x="14" y="3" width="7" height="7"/>
+                            <rect x="3" y="14" width="7" height="7"/>
+                            <rect x="14" y="14" width="7" height="7"/>
+                        </svg>
+                        <p>Haz clic para iniciar el escaner</p>
+                        <button class="btn btn-primary" onclick="startQRScanner()">Iniciar Camara</button>
+                    </div>
+                </div>
+                <div class="qr-instructions">
+                    <h4>Como escanear:</h4>
+                    <ol>
+                        <li>Abre la app de tu DVR (ej: Hik-Connect, gDMSS, XMEye)</li>
+                        <li>Ve a Configuracion > Compartir dispositivo o Codigo QR</li>
+                        <li>Muestra el codigo QR frente a la camara</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Tab: Configuracion Manual -->
+            <div class="dvr-tab-content" id="dvr-tab-manual">
+                <form id="dvr-manual-form" onsubmit="handleDVRManualConfig(event)">
+                    <div class="form-group">
+                        <label for="dvr-name">Nombre del DVR</label>
+                        <input type="text" id="dvr-name" placeholder="Ej: DVR Casa Principal" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dvr-brand">Marca</label>
+                            <select id="dvr-brand" onchange="updateDVRDefaults()">
+                                <option value="hikvision">Hikvision</option>
+                                <option value="dahua">Dahua</option>
+                                <option value="hview">H.VIEW</option>
+                                <option value="xmeye">XMEye / Generic</option>
+                                <option value="other">Otro</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="dvr-channels">Canales</label>
+                            <select id="dvr-channels">
+                                <option value="4">4 Canales</option>
+                                <option value="8" selected>8 Canales</option>
+                                <option value="16">16 Canales</option>
+                                <option value="32">32 Canales</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dvr-ip">Direccion IP</label>
+                            <input type="text" id="dvr-ip" placeholder="192.168.1.64" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="dvr-port">Puerto RTSP</label>
+                            <input type="number" id="dvr-port" value="554" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dvr-username">Usuario</label>
+                            <input type="text" id="dvr-username" value="admin" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="dvr-password">Contrasena</label>
+                            <input type="password" id="dvr-password" placeholder="Contrasena" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="dvr-rtsp-template">Plantilla URL RTSP</label>
+                        <input type="text" id="dvr-rtsp-template" placeholder="rtsp://{user}:{pass}@{ip}:{port}/Streaming/Channels/{ch}01">
+                        <small class="form-hint">Variables: {user}, {pass}, {ip}, {port}, {ch} (numero de canal)</small>
+                    </div>
+                    <div class="info-box">
+                        <strong>Plantillas RTSP por marca:</strong>
+                        <ul>
+                            <li><strong>Hikvision:</strong> rtsp://user:pass@IP:554/Streaming/Channels/101</li>
+                            <li><strong>Dahua:</strong> rtsp://user:pass@IP:554/cam/realmonitor?channel=1&subtype=0</li>
+                            <li><strong>H.VIEW:</strong> rtsp://user:pass@IP:554/stream1</li>
+                            <li><strong>XMEye:</strong> rtsp://user:pass@IP:554/user=user&password=pass&channel=1</li>
+                        </ul>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-ghost" onclick="closeDVRScanModal()">Cancelar</button>
+                        <button type="button" class="btn btn-secondary" onclick="testDVRConnection()">Probar Conexion</button>
+                        <button type="submit" class="btn btn-primary">Conectar DVR</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: DVR Conectado - Lista de Camaras -->
+    <div id="dvr-cameras-modal" class="modal hidden">
+        <div class="modal-overlay" onclick="closeDVRCamerasModal()"></div>
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2 id="dvr-cameras-title">Camaras del DVR</h2>
+                <button class="modal-close" onclick="closeDVRCamerasModal()">&#x2715;</button>
+            </div>
+            <div class="dvr-info-banner">
+                <div class="dvr-info-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                        <rect x="2" y="4" width="20" height="16" rx="2"/>
+                        <circle cx="8" cy="12" r="2"/>
+                        <path d="M14 10h4M14 14h4"/>
+                    </svg>
+                </div>
+                <div class="dvr-info-details">
+                    <span id="dvr-info-name">DVR</span>
+                    <span id="dvr-info-ip">192.168.1.64</span>
+                </div>
+                <span id="dvr-info-status" class="badge badge-success">Conectado</span>
+            </div>
+            <p class="dvr-cameras-subtitle">Selecciona las camaras que deseas agregar:</p>
+            <div class="dvr-cameras-grid" id="dvr-cameras-grid"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-ghost" onclick="closeDVRCamerasModal()">Cancelar</button>
+                <button type="button" class="btn btn-secondary" onclick="selectAllDVRCameras()">Seleccionar Todas</button>
+                <button type="button" class="btn btn-primary" onclick="addSelectedDVRCameras()">Agregar Seleccionadas</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
