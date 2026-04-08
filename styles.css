@@ -1098,6 +1098,35 @@ select {
   transition: transform 0.3s ease;
 }
 
+/* Camera Delete Button */
+.camera-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  width: 28px;
+  height: 28px;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition);
+  color: #ffffff;
+}
+
+.camera-card:hover .camera-delete-btn {
+  opacity: 1;
+}
+
+.camera-delete-btn:hover {
+  background: #ef4444;
+  transform: scale(1.1);
+}
+
 /* Camera Status Badges */
 .camera-status-badges {
   display: flex;
