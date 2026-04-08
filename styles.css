@@ -1311,6 +1311,315 @@ select {
 }
 
 /* ===========================
+   DVR QR SCANNER
+   =========================== */
+.dvr-connection-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.dvr-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 20px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+
+.dvr-tab:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.dvr-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.dvr-tab svg {
+  flex-shrink: 0;
+}
+
+.dvr-tab-content {
+  display: none;
+}
+
+.dvr-tab-content.active {
+  display: block;
+}
+
+.qr-scanner-container {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto 24px;
+  aspect-ratio: 1;
+  background: #0a0a0a;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.qr-reader {
+  width: 100%;
+  height: 100%;
+}
+
+.qr-reader video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.qr-reader-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: #666666;
+  text-align: center;
+  padding: 20px;
+}
+
+.qr-reader-placeholder svg {
+  opacity: 0.4;
+}
+
+.qr-reader-placeholder p {
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.qr-reader-placeholder.hidden {
+  display: none;
+}
+
+.qr-instructions {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+
+.qr-instructions h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.qr-instructions ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+
+/* DVR Cameras Grid */
+.dvr-info-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+}
+
+.dvr-info-icon {
+  width: 48px;
+  height: 48px;
+  background: var(--accent);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+
+.dvr-info-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dvr-info-details span:first-child {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.dvr-info-details span:last-child {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+.dvr-cameras-subtitle {
+  margin: 0 0 16px 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.dvr-cameras-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.dvr-camera-item {
+  position: relative;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.dvr-camera-item:hover {
+  border-color: var(--border-hover);
+}
+
+.dvr-camera-item.selected {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.dvr-camera-item.unavailable {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dvr-camera-checkbox {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.dvr-camera-item.selected .dvr-camera-checkbox {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.dvr-camera-checkbox svg {
+  width: 12px;
+  height: 12px;
+  color: #ffffff;
+  opacity: 0;
+}
+
+.dvr-camera-item.selected .dvr-camera-checkbox svg {
+  opacity: 1;
+}
+
+.dvr-camera-icon {
+  width: 40px;
+  height: 40px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+  color: var(--text-muted);
+}
+
+.dvr-camera-item.selected .dvr-camera-icon {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent);
+}
+
+.dvr-camera-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.dvr-camera-channel {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.dvr-camera-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.dvr-camera-status.online {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+
+.dvr-camera-status.offline {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.dvr-camera-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* QR Scanner Styles Override */
+#qr-reader {
+  border: none !important;
+}
+
+#qr-reader__scan_region {
+  background: transparent !important;
+}
+
+#qr-reader__dashboard {
+  padding: 10px !important;
+}
+
+#qr-reader__dashboard_section_csr button {
+  background: var(--accent) !important;
+  border: none !important;
+  padding: 10px 20px !important;
+  border-radius: var(--radius-sm) !important;
+  color: #ffffff !important;
+  cursor: pointer !important;
+}
+
+/* ===========================
    RESPONSIVE
    =========================== */
 @media (max-width: 768px) {
@@ -1388,5 +1697,34 @@ select {
   .radio-card-content svg {
     width: 20px;
     height: 20px;
+  }
+
+  .dvr-connection-tabs {
+    flex-direction: column;
+  }
+
+  .dvr-tab {
+    border-bottom: none;
+    border-left: 2px solid transparent;
+    margin-bottom: 0;
+    margin-left: -2px;
+    justify-content: flex-start;
+  }
+
+  .dvr-tab.active {
+    border-bottom-color: transparent;
+    border-left-color: var(--accent);
+  }
+
+  .qr-scanner-container {
+    max-width: 100%;
+  }
+
+  .dvr-cameras-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dvr-info-banner {
+    flex-wrap: wrap;
   }
 }
